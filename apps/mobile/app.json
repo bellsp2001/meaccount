@@ -1,0 +1,39 @@
+{
+  "expo": {
+    "name": "MeAccount",
+    "slug": "meaccount-mobile",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "backgroundColor": "#07090E"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.meaccount.mobile",
+      "infoPlist": {
+        "NSCameraUsageDescription": "MeAccount ใช้กล้องเพื่อสแกนใบเสร็จและใบแจ้งหนี้ด้วย AI OCR"
+      }
+    },
+    "android": {
+      "package": "com.meaccount.mobile",
+      "permissions": ["CAMERA", "READ_EXTERNAL_STORAGE"],
+      "adaptiveIcon": {
+        "backgroundColor": "#07090E"
+      }
+    },
+    "plugins": [
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MeAccount ใช้กล้องเพื่อสแกนใบเสร็จและใบแจ้งหนี้ด้วย AI OCR"
+        }
+      ]
+    ],
+    "extra": {
+      "apiUrl": "https://api.meaccount.com"
+    }
+  }
+}

@@ -1,0 +1,38 @@
+@import "tailwindcss";
+
+:root {
+  --color-accent: #00D4AA;
+  --color-accent-light: #4FACFE;
+  --color-bg: #07090E;
+  --color-card: #0D1018;
+  --color-border: #151C28;
+  --color-text: #DDE3EE;
+  --color-muted: #4A5A70;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-family: "IBM Plex Sans Thai", "IBM Plex Sans", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer utilities {
+  .card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 12px; }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
+    color: var(--color-bg); font-weight: 700; border-radius: 8px;
+    padding: 10px 20px; border: none; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-primary:hover { opacity: 0.88; }
+  .input-field {
+    background: #0A0E18; border: 1px solid var(--color-border);
+    border-radius: 8px; padding: 10px 14px; color: var(--color-text);
+    width: 100%; font-size: 14px; outline: none;
+    transition: border-color 0.15s;
+  }
+  .input-field:focus { border-color: var(--color-accent); }
+}

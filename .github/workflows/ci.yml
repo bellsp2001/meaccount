@@ -1,0 +1,92 @@
+name: MeAccount CI
+
+on:
+  push:
+    branches: [main, dev]
+  pull_request:
+    branches: [main, dev]
+
+jobs:
+  # ── Backend Tests ──────────────────────────
+  test-api:
+    name: Backend Tests (FastAPI)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: meaccount_test
+          POSTGRES_USER: meaccount
+          POSTGRES_PASSWORD: testpassword
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+          cache-dependency-path: apps/api/requirements.txt
+
+      - name: Install dependencies
+        working-directory: apps/api
+        run: pip install -r requirements.txt
+
+      - name: Run tests
+        working-directory: apps/api
+        env:
+          POSTGRES_HOST: localhost
+          POSTGRES_DB: meaccount_test
+          POSTGRES_USER: meaccount
+          POSTGRES_PASSWORD: testpassword
+          SECRET_KEY: test_secret_key_for_ci_only_32chars
+          ANTHROPIC_API_KEY: ""
+        run: pytest tests/ -v --tb=short
+
+  # ── Frontend Tests ─────────────────────────
+  test-web:
+    name: Frontend Tests (React)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: apps/web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: apps/web
+        run: npm ci
+
+      - name: Lint
+        working-directory: apps/web
+        run: npm run lint --if-present
+
+      - name: Type check
+        working-directory: apps/web
+        run: npx tsc --noEmit
+
+      - name: Run tests
+        working-directory: apps/web
+        run: npm test --if-present
+
+  # ── Deploy to Staging (on push to dev) ────
+  deploy-staging:
+    name: Deploy to Staging
+    needs: [test-api, test-web]
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' && github.event_name == 'push'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy (add your cloud provider step here)
+        run: echo "🚀 Deploy to staging — configure your cloud provider"
