@@ -46,7 +46,7 @@ jobs:
           POSTGRES_DB: meaccount_test
           POSTGRES_USER: meaccount
           POSTGRES_PASSWORD: testpassword
-          SECRET_KEY: test_secret_key_for_ci_only_32chars
+          SECRET_KEY: dev_secret_key_change_in_production_min_32_chars
           ANTHROPIC_API_KEY: ""
         run: pytest tests/ -v --tb=short
 
