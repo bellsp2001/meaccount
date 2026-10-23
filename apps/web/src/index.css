@@ -1,0 +1,171 @@
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────────────────────────
+   MeAccount design system — Odoo-clean surfaces + iOS "liquid glass"
+   Light mode = the Odoo-style bright product. Dark = iOS glass at night.
+   ───────────────────────────────────────────────────────────── */
+
+:root {
+  /* soft "tavola" coral/peach accent */
+  --color-accent: #E8926F;
+  --color-accent-strong: #D5704E;
+  --color-accent-light: #F4B49C;
+  --color-on-accent: #1A1207;
+
+  /* surfaces — deep flat navy like tavola */
+  --color-bg: #0A0E1A;
+  --color-bg-inset: #121829;
+  --color-card: rgba(19, 26, 43, 0.82);
+  --color-card-solid: #131A2B;
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-border-strong: rgba(255, 255, 255, 0.13);
+
+  /* text */
+  --color-text: #E9EDF6;
+  --color-text-secondary: #AAB3C6;
+  --color-text-tertiary: #828BA0;
+  --color-muted: #646D82;
+  --color-dim: #4A5266;
+
+  /* flat deep-navy wallpaper with one faint warm glow at the top */
+  --bg-wallpaper: radial-gradient(1300px 760px at 50% -14%, rgba(232, 146, 111, 0.05), transparent 62%);
+
+  /* glass + type */
+  --glass-blur: 22px;
+  --glass-hi: rgba(255, 255, 255, 0.08);
+  --font-display: "Inter", "IBM Plex Sans Thai", system-ui, sans-serif;
+  --shadow-card: 0 1px 1px rgba(0,0,0,0.30), 0 18px 44px -24px rgba(0,0,0,0.75);
+  --shadow-pop: 0 14px 48px -12px rgba(0,0,0,0.65);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --color-accent: #E85D3D;
+  --color-accent-strong: #CF4A2C;
+  --color-accent-light: #F2714E;
+  --color-on-accent: #FFFFFF;
+
+  --bg-wallpaper:
+    radial-gradient(1050px 720px at 6% -8%, rgba(242, 113, 78, 0.14), transparent 60%),
+    radial-gradient(900px 640px at 102% 2%, rgba(56, 90, 150, 0.16), transparent 55%),
+    radial-gradient(820px 720px at 58% 112%, rgba(242, 113, 78, 0.08), transparent 55%);
+
+  --color-bg: #F5F3F1;
+  --color-bg-inset: #FBFAF8;
+  --color-card: rgba(255, 255, 255, 0.78);
+  --color-card-solid: #FFFFFF;
+  --color-border: rgba(30, 27, 24, 0.09);
+  --color-border-subtle: rgba(30, 27, 24, 0.05);
+  --color-border-strong: rgba(30, 27, 24, 0.14);
+
+  --color-text: #211C19;
+  --color-text-secondary: #4C463F;
+  --color-text-tertiary: #645D54;
+  --color-muted: #837A6F;
+  --color-dim: #A79E92;
+
+  --glass-hi: rgba(255, 255, 255, 0.65);
+  --shadow-card: 0 1px 2px rgba(30,27,24,0.05), 0 14px 32px -16px rgba(30,27,24,0.18);
+  --shadow-pop: 0 12px 44px -10px rgba(30,27,24,0.22);
+  color-scheme: light;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background-color: var(--color-bg);
+  /* flat deep navy in dark (tavola); soft iOS wallpaper in light */
+  background-image: var(--bg-wallpaper);
+  background-attachment: fixed;
+  color: var(--color-text);
+  font-family: "IBM Plex Sans Thai", "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-accent) 45%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--color-accent) 40%, transparent); border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
+
+@layer utilities {
+  .glass {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  }
+  /* Stronger frosted bar for the top bar + sidebar — more blur, a crisp inner
+     highlight and a soft lift so the chrome reads clearly over the content. */
+  .glass-bar {
+    background: var(--color-card);
+    backdrop-filter: blur(32px) saturate(185%);
+    -webkit-backdrop-filter: blur(32px) saturate(185%);
+    box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow-card);
+  }
+  .card {
+    background: var(--color-card);
+    border: 1px solid var(--color-border);
+    border-radius: 20px;
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  }
+  /* tavola-style pill chip */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--color-bg-inset);
+    border: 1px solid var(--color-border);
+    border-radius: 999px; padding: 7px 14px;
+    font-size: 12px; color: var(--color-text-secondary); font-weight: 600;
+  }
+  .pill-accent {
+    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong));
+    border-color: transparent; color: var(--color-on-accent);
+    box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--color-accent) 60%, transparent);
+  }
+  /* segmented toggle */
+  .seg {
+    display: inline-flex; background: var(--color-bg-inset);
+    border: 1px solid var(--color-border); border-radius: 999px; padding: 3px;
+  }
+  .seg > button {
+    border: none; background: transparent; cursor: pointer;
+    border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 600;
+    color: var(--color-text-tertiary); transition: all 0.15s;
+  }
+  .seg > button[data-active="true"] {
+    background: var(--color-accent); color: var(--color-on-accent);
+    box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--color-accent) 60%, transparent);
+  }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong));
+    color: var(--color-on-accent); font-weight: 700; border-radius: 12px;
+    padding: 10px 20px; border: none; cursor: pointer;
+    letter-spacing: 0.01em;
+    box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--color-accent) 65%, transparent);
+    transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+  }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--color-accent) 70%, transparent); }
+  .btn-primary:active { transform: translateY(0); }
+  .input-field {
+    background: var(--color-bg-inset); border: 1px solid var(--color-border);
+    border-radius: 10px; padding: 10px 14px; color: var(--color-text);
+    width: 100%; font-size: 14px; outline: none;
+    transition: border-color 0.15s, box-shadow 0.15s;
+  }
+  .input-field:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+  /* horizontal nav strips — scroll without a visible scrollbar */
+  .nav-scroll { scrollbar-width: none; }
+  .nav-scroll::-webkit-scrollbar { display: none; }
+  .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
+  .dock-app { transition: transform 0.15s ease; }
+  .dock-app:hover { transform: translateY(-6px) scale(1.06); }
+}

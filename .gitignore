@@ -1,0 +1,17 @@
+node_modules/
+__pycache__/
+*.py[cod]
+.env
+.env.local
+.env.*.local
+dist/
+build/
+.vite/
+*.egg-info/
+.venv/
+venv/
+.DS_Store
+*.log
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
