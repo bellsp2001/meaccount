@@ -43,6 +43,17 @@ export interface ChatV2Response {
   sql_query?: string | null;
 }
 
+export interface RiskAlert {
+  id: string;
+  pattern: string;
+  risk_level: 'low' | 'medium' | 'high' | 'critical';
+  risk_score: number;
+  title: string;
+  description: string;
+  status: string;
+  amount?: number;
+  detected_at: string;
+}
 
 export interface OCRInvoiceResponse {
   customer_name: string | null;
@@ -101,6 +112,17 @@ export function createMeAccountApi(client: AxiosInstance) {
         client.get('/api/v1/inventory/products', { params }),
       forecast: (productId: string) =>
         client.get(`/api/v1/inventory/ai/forecast/${productId}`),
+    },
+
+    fraud: {
+      alerts: (params?: { status?: string }) =>
+        client.get<RiskAlert[]>('/api/v1/fraud/alerts', { params }),
+      dashboard: () => client.get('/api/v1/fraud/dashboard'),
+    },
+
+    analytics: {
+      cashFlowForecast: () => client.get('/api/v1/analytics/cash-flow-forecast'),
+      revenueForecast: () => client.get('/api/v1/analytics/revenue-forecast'),
     },
   };
 }

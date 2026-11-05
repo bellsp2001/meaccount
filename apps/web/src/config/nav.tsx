@@ -18,6 +18,7 @@ export const NAV: NavItem[] = [
       { to: '/ar/deposits',     label: 'ใบมัดจำ' },
       { to: '/ar/reports',      label: 'รายงานการขาย' },
       { to: '/ar/customers',    label: 'รายชื่อลูกค้า' },
+      { to: '/ar/aging',        label: 'รายงานอายุหนี้' },
       { to: '/ar/books',        label: 'สมุดบันทึก', roles: ['admin','accountant'] },
     ],
   },
@@ -62,15 +63,42 @@ export const NAV: NavItem[] = [
       { to: '/reports',         label: 'งบการเงิน' },
       { to: '/reports/builder', label: 'Report Builder' },
       { to: '/reports/ask',     label: 'ถามด้วยภาษาพูด' },
+      { to: '/analytics',       label: 'Predictive Analytics', roles: ['admin','accountant','manager'] },
     ],
   },
   { to: '/ai-chat',   icon: 'ai', label: 'AI Assistant', roles: ['admin','accountant','manager'], badge: 'Beta' },
-  { to: '/audit',     icon: 'audit', label: 'AI Audit',       roles: ['admin','manager','auditor'] },
+  {
+    to: '/audit', icon: 'audit', label: 'AI Audit', roles: ['admin','manager','auditor'],
+    children: [
+      { to: '/audit', label: 'AI Audit' },
+      { to: '/fraud', label: 'Fraud Detection' },
+    ],
+  },
+  {
+    to: '/documents', icon: 'documents', label: 'Document AI', roles: ['admin','accountant','cashier'],
+    children: [
+      { to: '/documents',       label: 'Document Center' },
+      { to: '/documents/match', label: '3-Way Match' },
+    ],
+  },
   {
     to: '/companies', icon: 'building', label: 'บริษัทในเครือ', roles: ['admin','accountant'], badge: 'New',
     children: [
       { to: '/companies',             label: 'บริษัททั้งหมด' },
       { to: '/companies/consolidated', label: 'งบการเงินรวม' },
+    ],
+  },
+  {
+    // Platform/admin tools grouped under one entry; each page keeps its own role from App.tsx.
+    to: '/developer/integrations', icon: 'settings', label: 'ตั้งค่าระบบ', roles: ['admin','accountant'],
+    children: [
+      { to: '/developer/integrations', label: 'Integrations' },
+      { to: '/developer/keys',         label: 'API Keys',             roles: ['admin'] },
+      { to: '/ai-ops/profiles',        label: 'Prompt Profiles',      roles: ['admin'] },
+      { to: '/ai-ops/ab-testing',      label: 'A/B Testing' },
+      { to: '/security/compliance',    label: 'Compliance Scanner',   roles: ['admin'] },
+      { to: '/security/dsr',           label: 'Data Requests (PDPA)', roles: ['admin'] },
+      { to: '/ops/readiness',          label: 'Go-Live Readiness',    roles: ['admin'] },
     ],
   },
   { to: '/users',     icon: 'users', label: 'จัดการผู้ใช้', roles: ['admin'] },

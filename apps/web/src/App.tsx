@@ -36,6 +36,18 @@ import TeamCalendarPage from '@/pages/leave/TeamCalendarPage'
 import DocTemplateEditorPage from '@/pages/doctemplate/DocTemplateEditorPage'
 import ReportBuilderPage from '@/pages/reports/ReportBuilderPage'
 import NLReportPage from '@/pages/reports/NLReportPage'
+import AgingReportPage from '@/pages/ar/AgingReportPage'
+import RiskDashboardPage from '@/pages/fraud/RiskDashboardPage'
+import PredictiveAnalyticsPage from '@/pages/analytics/PredictiveAnalyticsPage'
+import DocumentCenterPage from '@/pages/documents/DocumentCenterPage'
+import ThreeWayMatchPage from '@/pages/documents/ThreeWayMatchPage'
+import APIKeysPage from '@/pages/developer/APIKeysPage'
+import IntegrationsPage from '@/pages/developer/IntegrationsPage'
+import PromptProfilesPage from '@/pages/ai-ops/PromptProfilesPage'
+import ABTestingPage from '@/pages/ai-ops/ABTestingPage'
+import ComplianceDashboardPage from '@/pages/security/ComplianceDashboardPage'
+import DataRequestsPage from '@/pages/security/DataRequestsPage'
+import GoLiveReadinessPage from '@/pages/ops/GoLiveReadinessPage'
 import type { UserRole } from '@/types'
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
@@ -107,6 +119,18 @@ export default function App() {
           <Route path="/tax/wht"  element={<RoleGuard roles={ACC}><WHTCertificatesPage /></RoleGuard>} />
           <Route path="/reports"  element={<RoleGuard roles={['admin','accountant','manager','auditor']}><FinancialStatementsPage /></RoleGuard>} />
           <Route path="/audit"    element={<RoleGuard roles={['admin','manager','auditor']}><AuditDashboardPage /></RoleGuard>} />
+          <Route path="/fraud"    element={<RoleGuard roles={['admin','manager','auditor']}><RiskDashboardPage /></RoleGuard>} />
+          <Route path="/analytics" element={<RoleGuard roles={['admin','accountant','manager']}><PredictiveAnalyticsPage /></RoleGuard>} />
+          <Route path="/ar/aging"         element={<RoleGuard roles={AR_ROLES}><AgingReportPage /></RoleGuard>} />
+          <Route path="/documents"       element={<RoleGuard roles={AR_ROLES}><DocumentCenterPage /></RoleGuard>} />
+          <Route path="/documents/match" element={<RoleGuard roles={AR_ROLES}><ThreeWayMatchPage /></RoleGuard>} />
+          <Route path="/developer/keys"         element={<RoleGuard roles={['admin']}><APIKeysPage /></RoleGuard>} />
+          <Route path="/developer/integrations" element={<RoleGuard roles={ACC}><IntegrationsPage /></RoleGuard>} />
+          <Route path="/ai-ops/profiles"   element={<RoleGuard roles={['admin']}><PromptProfilesPage /></RoleGuard>} />
+          <Route path="/ai-ops/ab-testing" element={<RoleGuard roles={ACC}><ABTestingPage /></RoleGuard>} />
+          <Route path="/security/compliance" element={<RoleGuard roles={['admin']}><ComplianceDashboardPage /></RoleGuard>} />
+          <Route path="/security/dsr"        element={<RoleGuard roles={['admin']}><DataRequestsPage /></RoleGuard>} />
+          <Route path="/ops/readiness"       element={<RoleGuard roles={['admin']}><GoLiveReadinessPage /></RoleGuard>} />
           <Route path="/companies"             element={<RoleGuard roles={['admin']}><CompaniesPage /></RoleGuard>} />
           <Route path="/companies/consolidated" element={<RoleGuard roles={ACC}><ConsolidatedPage /></RoleGuard>} />
           <Route path="/pos" element={<RoleGuard roles={['admin','cashier','accountant']}><POSTerminalPage /></RoleGuard>} />

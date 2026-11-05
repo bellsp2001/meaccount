@@ -27,7 +27,12 @@ import models.tax           # noqa: F401
 import models.period        # noqa: F401
 import models.report        # noqa: F401
 import models.knowledge     # noqa: F401
+import models.fraud         # noqa: F401
+import models.document      # noqa: F401
 import models.company       # noqa: F401
+import models.api_platform  # noqa: F401
+import models.ai_ops        # noqa: F401
+import models.security      # noqa: F401
 import models.pos           # noqa: F401
 import models.leave         # noqa: F401
 import models.doctemplate   # noqa: F401

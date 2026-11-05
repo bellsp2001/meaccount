@@ -50,6 +50,7 @@ export const NOTIFICATION_TYPES = {
   BILL_PENDING_APPROVAL: 'bill_pending_approval',
   INVOICE_OVERDUE: 'invoice_overdue',
   PAYMENT_RECEIVED: 'payment_received',
+  FRAUD_ALERT: 'fraud_alert',
 } as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[keyof typeof NOTIFICATION_TYPES];

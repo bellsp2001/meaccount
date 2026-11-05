@@ -18,3 +18,4 @@ venv/
 .ruff_cache/
 # Local SQLite databases (dev data + per-test files) — production uses PostgreSQL
 *.db
+*.db-journal

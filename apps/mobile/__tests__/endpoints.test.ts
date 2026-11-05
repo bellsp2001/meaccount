@@ -113,3 +113,14 @@ describe('createMeAccountApi — inventory', () => {
     expect(calls[0].url).toBe('/api/v1/inventory/ai/forecast/prod-42');
   });
 });
+
+describe('createMeAccountApi — fraud', () => {
+  it('calls GET /api/v1/fraud/dashboard', async () => {
+    const { mockClient, calls } = makeMockClient();
+    const meApi = createMeAccountApi(mockClient);
+
+    await meApi.fraud.dashboard();
+
+    expect(calls[0].url).toBe('/api/v1/fraud/dashboard');
+  });
+});
