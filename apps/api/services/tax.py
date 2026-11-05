@@ -10,10 +10,54 @@ from fastapi import HTTPException
 import xml.etree.ElementTree as ET
 import xml.dom.minidom as minidom
 
-from models.tax import VATReturn, VATReturnStatus, WithholdingCertificate, WHTType, WHTCertStatus
+from models.tax import VATReturn, VATReturnStatus, WithholdingCertificate, WHTType, WHTCertStatus, TaxCode, TaxKind
 from models.ar import Invoice, InvoiceStatus
 from models.ap import Bill, BillStatus
-from schemas.tax import VATReturnGenerateRequest, WHTCertificateCreate, WHTBulkGenerateRequest
+from schemas.tax import (VATReturnGenerateRequest, WHTCertificateCreate, WHTBulkGenerateRequest,
+                         TaxCodeCreate, TaxCodeUpdate)
+
+
+# ── Tax Codes (ประเภทภาษี) ──────────────────────────────────────
+
+# Common Thai rates, created the first time the list is opened so a new install isn't empty.
+DEFAULT_TAX_CODES = [
+    ("VAT7",  "ภาษีมูลค่าเพิ่ม 7%",            TaxKind.VAT, "7",  "อัตราปกติสำหรับการขายและซื้อสินค้า/บริการ"),
+    ("VAT0",  "ภาษีมูลค่าเพิ่ม 0%",            TaxKind.VAT, "0",  "การส่งออกสินค้า/บริการ — ยังเป็นผู้ประกอบการจดทะเบียน"),
+    ("VATEX", "ยกเว้นภาษีมูลค่าเพิ่ม",          TaxKind.VAT, "0",  "กิจการที่ได้รับยกเว้นตามมาตรา 81"),
+    ("WHT1",  "หัก ณ ที่จ่าย 1% — ค่าขนส่ง",     TaxKind.WHT, "1",  None),
+    ("WHT2",  "หัก ณ ที่จ่าย 2% — ค่าโฆษณา",     TaxKind.WHT, "2",  None),
+    ("WHT3",  "หัก ณ ที่จ่าย 3% — ค่าบริการ/ค่าจ้าง", TaxKind.WHT, "3", None),
+    ("WHT5",  "หัก ณ ที่จ่าย 5% — ค่าเช่า",      TaxKind.WHT, "5",  None),
+]
+
+
+def get_tax_codes(db: Session, include_inactive: bool = True) -> List[TaxCode]:
+    if db.query(TaxCode).count() == 0:
+        for code, name, kind, rate, desc in DEFAULT_TAX_CODES:
+            db.add(TaxCode(code=code, name=name, kind=kind, rate=Decimal(rate), description=desc))
+        db.commit()
+    q = db.query(TaxCode).filter(TaxCode.is_deleted == False)
+    if not include_inactive:
+        q = q.filter(TaxCode.is_active == True)
+    return q.order_by(TaxCode.kind, TaxCode.rate.desc(), TaxCode.code).all()
+
+
+def create_tax_code(db: Session, payload: TaxCodeCreate) -> TaxCode:
+    if db.query(TaxCode).filter(TaxCode.code == payload.code).first():
+        raise HTTPException(400, f"รหัสภาษี {payload.code} มีอยู่แล้ว")
+    tc = TaxCode(**payload.model_dump())
+    db.add(tc); db.commit(); db.refresh(tc)
+    return tc
+
+
+def update_tax_code(db: Session, tax_code_id: UUID, payload: TaxCodeUpdate) -> TaxCode:
+    tc = db.query(TaxCode).filter(TaxCode.id == tax_code_id, TaxCode.is_deleted == False).first()
+    if not tc:
+        raise HTTPException(404, "ไม่พบประเภทภาษี")
+    for k, v in payload.model_dump(exclude_none=True).items():
+        setattr(tc, k, v)
+    db.commit(); db.refresh(tc)
+    return tc
 
 
 # ── VAT Return (ภ.พ.30) ─────────────────────────────────────────

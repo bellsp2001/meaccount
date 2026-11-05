@@ -1,13 +1,18 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
+import { JOURNAL_TYPES, JOURNAL_TYPE_META, isJournalType, type JournalType } from '@/config/journals'
+import { JournalTypeBadge as TypeBadge } from '@/components/ui/JournalTypeBadge'
 
 interface Account { id: string; code: string; name: string; account_type: string; normal_balance: string }
 interface JEntry  { id: string; account_id: string; account_code?: string; account_name?: string; debit: number; credit: number; description?: string }
-interface Journal { id: string; number: string; date: string; description: string; status: 'draft'|'posted'|'reversed'; entries: JEntry[]; total_debit?: number; total_credit?: number; ai_suggested?: boolean }
+interface Journal { id: string; number: string; date: string; description: string; journal_type: JournalType; status: 'draft'|'posted'|'reversed'; entries: JEntry[]; total_debit?: number; total_credit?: number; ai_suggested?: boolean }
+
+const TYPE_META = JOURNAL_TYPE_META
 
 const entrySchema = z.object({
   account_id:  z.string().min(1, 'เลือกบัญชี'),
@@ -16,6 +21,7 @@ const entrySchema = z.object({
   description: z.string().optional(),
 })
 const journalSchema = z.object({
+  journal_type: z.enum(['general','sales','purchase','receipt','payment']),
   date:        z.string().min(1, 'ระบุวันที่'),
   description: z.string().min(1, 'ระบุคำอธิบาย'),
   reference:   z.string().optional(),
@@ -46,9 +52,15 @@ export default function JournalPage() {
   const [aiResult, setAiResult] = useState<{explanation:string;confidence:number}|null>(null)
   const [viewJournal, setViewJournal] = useState<Journal|null>(null)
 
+  // The selected book lives in the URL (?type=sales) so it survives reloads and can be linked to.
+  const [params, setParams] = useSearchParams()
+  const rawType = params.get('type')
+  const activeType: JournalType | null = isJournalType(rawType) ? rawType : null
+  const selectType = (t: JournalType | null) => setParams(t ? { type: t } : {}, { replace: true })
+
   const { data: journals = [], isLoading } = useQuery<Journal[]>({
-    queryKey: ['journals'],
-    queryFn: async () => (await api.get('/api/v1/journals/')).data,
+    queryKey: ['journals', activeType ?? 'all'],
+    queryFn: async () => (await api.get('/api/v1/journals/', { params: activeType ? { journal_type: activeType } : {} })).data,
   })
   const { data: accounts = [] } = useQuery<Account[]>({
     queryKey: ['accounts'],
@@ -67,6 +79,7 @@ export default function JournalPage() {
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<JForm>({
     resolver: zodResolver(journalSchema),
     defaultValues: {
+      journal_type: 'general',
       date: new Date().toISOString().split('T')[0],
       entries: [
         { account_id: '', debit: 0, credit: 0, description: '' },
@@ -97,6 +110,7 @@ export default function JournalPage() {
       if (newEntries.length >= 2) {
         setValue('entries', newEntries)
         setValue('description', aiDesc)
+        setValue('journal_type', activeType ?? 'general')
         setAiMode(false)
         setShowCreate(true)
       }
@@ -112,18 +126,28 @@ export default function JournalPage() {
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>สมุดรายวัน</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>General Journal — Double-Entry Bookkeeping</p>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{activeType ? TYPE_META[activeType].full : 'สมุดรายวัน'}</h2>
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>{activeType ? TYPE_META[activeType].en : 'ทุกเล่ม'} — Double-Entry Bookkeeping</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setAiMode(true)}
             style={{ background: '#F2714E15', border: '1px solid #F2714E40', color: '#F2714E', fontWeight: 700, fontSize: 12, borderRadius: 9, padding: '9px 16px', cursor: 'pointer' }}>
             🤖 AI แนะนำการลงบัญชี
           </button>
-          <button onClick={() => { setShowCreate(true); setAiResult(null) }}
+          <button onClick={() => { setValue('journal_type', activeType ?? 'general'); setShowCreate(true); setAiResult(null) }}
             style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
             + บันทึกรายการใหม่
           </button>
+        </div>
+      </div>
+
+      {/* Book tabs — scrolls sideways on narrow screens instead of wrapping */}
+      <div style={{ overflowX: 'auto', margin: '-4px -4px 0', padding: 4 }}>
+        <div className="seg" role="tablist" aria-label="ประเภทสมุดรายวัน" style={{ whiteSpace: 'nowrap' }}>
+          <button role="tab" aria-selected={!activeType} data-active={!activeType} onClick={() => selectType(null)}>ทั้งหมด</button>
+          {JOURNAL_TYPES.map(t => (
+            <button key={t.key} role="tab" aria-selected={activeType === t.key} data-active={activeType === t.key} onClick={() => selectType(t.key)}>{t.label}</button>
+          ))}
         </div>
       </div>
 
@@ -134,13 +158,13 @@ export default function JournalPage() {
         ) : journals.length === 0 ? (
           <div style={{ padding: 56, textAlign: 'center' }}>
             <p style={{ fontSize: 32, marginBottom: 12 }}>📒</p>
-            <p style={{ color: 'var(--color-dim)', fontSize: 13 }}>ยังไม่มีรายการสมุดรายวัน</p>
+            <p style={{ color: 'var(--color-dim)', fontSize: 13 }}>{activeType ? `ยังไม่มีรายการใน${TYPE_META[activeType].full}` : 'ยังไม่มีรายการสมุดรายวัน'}</p>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['เลขที่','วันที่','คำอธิบาย','Dr','Cr','สถานะ','Actions'].map(h => (
+                {['เลขที่','วันที่','ประเภท','คำอธิบาย','Dr','Cr','สถานะ','Actions'].map(h => (
                   <th key={h} style={{ padding: '11px 14px', textAlign: ['Dr','Cr'].includes(h) ? 'right' : 'left', fontSize: 10, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
                 ))}
               </tr>
@@ -152,6 +176,7 @@ export default function JournalPage() {
                   <tr key={j.id} onClick={() => setViewJournal(j)} style={{ cursor: 'pointer' }}>
                     <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontFamily: 'monospace', fontSize: 12, color: 'var(--color-accent-light)' }}>{j.number}</td>
                     <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, color: 'var(--color-text-secondary)' }}>{new Date(j.date).toLocaleDateString('th-TH')}</td>
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}><TypeBadge type={j.journal_type} /></td>
                     <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 13 }}>
                       <span>{j.description}</span>
                       {j.ai_suggested && <span style={{ marginLeft: 8, fontSize: 9, background: '#F2714E15', color: '#F2714E', border: '1px solid #F2714E30', padding: '1px 6px', borderRadius: 8 }}>AI</span>}
@@ -228,6 +253,12 @@ export default function JournalPage() {
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>สมุดรายวัน</label>
+                <select {...register('journal_type')} style={{ ...inp, padding: '10px 12px', cursor: 'pointer' }}>
+                  {JOURNAL_TYPES.map(t => <option key={t.key} value={t.key}>{t.full}</option>)}
+                </select>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ ...inp, display: 'block', padding: 0, background: 'none', border: 'none', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>วันที่</label>
@@ -331,6 +362,7 @@ export default function JournalPage() {
                 <p style={{ margin: 0, fontSize: 12, color: 'var(--color-muted)' }}>{viewJournal.description}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <TypeBadge type={viewJournal.journal_type} />
                 <span style={{ fontSize: 10, fontWeight: 700, color: STATUS_META[viewJournal.status].color, background: STATUS_META[viewJournal.status].color+'18', border: `1px solid ${STATUS_META[viewJournal.status].color}35`, padding: '3px 10px', borderRadius: 10 }}>
                   {STATUS_META[viewJournal.status].label}
                 </span>

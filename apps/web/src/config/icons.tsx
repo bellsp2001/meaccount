@@ -3,123 +3,148 @@
 // `currentColor`, so the caller controls the tint. Keeping them in one place
 // makes the dock / top-bar read as a single, modern icon system instead of a
 // mix of unicode glyphs and emoji.
+// Module icons follow Lucide (https://lucide.dev, ISC License).
 
 const P: Record<string, JSX.Element> = {
-  // Dashboard — 4-pane grid
+  // Dashboard — layout-dashboard
   dashboard: (
     <>
-      <rect x="3" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="3" width="7" height="7" rx="1.5" />
-      <rect x="14" y="14" width="7" height="7" rx="1.5" />
-      <rect x="3" y="14" width="7" height="7" rx="1.5" />
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
     </>
   ),
-  // Accounts Receivable — money coming in (arrow into wallet)
+  // Accounts Receivable — hand-coins
   receivable: (
     <>
-      <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
-      <path d="M16 12h1.5" />
-      <path d="M12 2v7m0 0 2.5-2.5M12 9 9.5 6.5" />
+      <path d="M11 15h2a2 2 0 1 0 0-4h-3c-.6 0-1.1.2-1.4.6L3 17" />
+      <path d="m7 21 1.6-1.4c.3-.4.8-.6 1.4-.6h4c1.1 0 2.1-.4 2.8-1.2l4.6-4.4a2 2 0 0 0-2.75-2.91l-4.2 3.9" />
+      <path d="m2 16 6 6" />
+      <circle cx="16" cy="9" r="2.9" />
+      <circle cx="6" cy="5" r="3" />
     </>
   ),
-  // Accounts Payable — money going out
+  // Accounts Payable — receipt-text
   payable: (
     <>
-      <path d="M4 8.5A1.5 1.5 0 0 1 5.5 7H19a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" />
-      <path d="M16 12h1.5" />
-      <path d="M12 9V2m0 7-2.5-2.5M12 9l2.5-2.5" />
+      <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z" />
+      <path d="M14 8H8" />
+      <path d="M16 12H8" />
+      <path d="M13 16H8" />
     </>
   ),
-  // General Ledger — open book
+  // General Ledger — book-open-text
   ledger: (
     <>
-      <path d="M12 6.5C10.5 5 8 4.5 5 4.5A1 1 0 0 0 4 5.5v12a1 1 0 0 0 1 1c3 0 5.5.5 7 2 1.5-1.5 4-2 7-2a1 1 0 0 0 1-1v-12a1 1 0 0 0-1-1c-3 0-5.5.5-7 2z" />
-      <path d="M12 6.5v13" />
+      <path d="M12 7v14" />
+      <path d="M16 12h2" />
+      <path d="M16 8h2" />
+      <path d="M3 18a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h5a4 4 0 0 1 4 4 4 4 0 0 1 4-4h5a1 1 0 0 1 1 1v13a1 1 0 0 1-1 1h-6a3 3 0 0 0-3 3 3 3 0 0 0-3-3z" />
+      <path d="M6 12h2" />
+      <path d="M6 8h2" />
     </>
   ),
-  // POS — storefront
+  // POS — store
   pos: (
     <>
-      <path d="M4 9h16l-1-4.5A1 1 0 0 0 18 4H6a1 1 0 0 0-1 .5z" />
-      <path d="M5 9v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V9" />
-      <path d="M10 20v-5h4v5" />
+      <path d="m2 7 4.41-4.41A2 2 0 0 1 7.83 2h8.34a2 2 0 0 1 1.42.59L22 7" />
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+      <path d="M15 22v-4a2 2 0 0 0-2-2h-2a2 2 0 0 0-2 2v4" />
+      <path d="M2 7h20" />
+      <path d="M22 7v3a2 2 0 0 1-2 2a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 16 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 12 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 8 12a2.7 2.7 0 0 1-1.59-.63.7.7 0 0 0-.82 0A2.7 2.7 0 0 1 4 12a2 2 0 0 1-2-2V7" />
     </>
   ),
-  // Inventory — stacked boxes
+  // Inventory — package
   inventory: (
     <>
-      <path d="M3.5 8.5 12 4l8.5 4.5v7L12 20l-8.5-4.5z" />
-      <path d="M3.5 8.5 12 13l8.5-4.5" />
-      <path d="M12 13v7" />
+      <path d="M11 21.73a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73z" />
+      <path d="M12 22V12" />
+      <path d="m3.3 7 8.7 5 8.7-5" />
+      <path d="m7.5 4.27 9 5.15" />
     </>
   ),
-  // Payroll — wallet with coin
+  // Payroll — banknote
   payroll: (
     <>
-      <rect x="3" y="6" width="18" height="13" rx="2.5" />
-      <path d="M3 10h18" />
-      <circle cx="16.5" cy="14.5" r="1.5" />
+      <rect x="2" y="6" width="20" height="12" rx="2" />
+      <circle cx="12" cy="12" r="2" />
+      <path d="M6 12h.01M18 12h.01" />
     </>
   ),
-  // Leave / HR — calendar
+  // Leave / HR — calendar-check
   calendar: (
     <>
-      <rect x="3.5" y="5" width="17" height="16" rx="2.5" />
-      <path d="M3.5 9.5h17" />
-      <path d="M8 3v4M16 3v4" />
+      <path d="M8 2v4" />
+      <path d="M16 2v4" />
+      <rect x="3" y="4" width="18" height="18" rx="2" />
+      <path d="M3 10h18" />
+      <path d="m9 16 2 2 4-4" />
     </>
   ),
-  // Tax — receipt with percent
+  // Tax — percent
   tax: (
     <>
-      <path d="M6 3h12v18l-3-1.8-3 1.8-3-1.8L6 21z" />
-      <path d="M9.5 9.5h.01M14.5 14.5h.01M15 9l-6 6" />
+      <path d="M19 5 5 19" />
+      <circle cx="6.5" cy="6.5" r="2.5" />
+      <circle cx="17.5" cy="17.5" r="2.5" />
     </>
   ),
-  // Document templates — layout template
+  // Document templates — file-text
   template: (
     <>
-      <rect x="3.5" y="3.5" width="17" height="17" rx="2.5" />
-      <path d="M3.5 9h17M9 9v11.5" />
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M10 9H8" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
     </>
   ),
-  // Reports — bar chart
+  // Reports — chart-column
   reports: (
     <>
-      <path d="M4 20V4M4 20h16" />
-      <path d="M8 20v-6M12.5 20V9M17 20v-9" />
+      <path d="M3 3v16a2 2 0 0 0 2 2h16" />
+      <path d="M18 17V9" />
+      <path d="M13 17V5" />
+      <path d="M8 17v-3" />
     </>
   ),
-  // AI Assistant — sparkle
+  // AI Assistant — sparkles
   ai: (
     <>
-      <path d="M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8z" />
-      <path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7z" />
+      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+      <path d="M20 3v4" />
+      <path d="M22 5h-4" />
+      <path d="M4 17v2" />
+      <path d="M5 18H3" />
     </>
   ),
-  // Audit — magnifier over checklist
+  // Audit — shield-check
   audit: (
     <>
-      <circle cx="10.5" cy="10.5" r="6.5" />
-      <path d="M15.2 15.2 20 20" />
-      <path d="M7.8 10.6l1.8 1.8 3.4-3.6" />
+      <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+      <path d="m9 12 2 2 4-4" />
     </>
   ),
-  // Companies / group — office buildings
+  // Companies / group — building-2
   building: (
     <>
-      <path d="M4 21V6a1 1 0 0 1 1-1h7a1 1 0 0 1 1 1v15" />
-      <path d="M13 21V10h6a1 1 0 0 1 1 1v10" />
-      <path d="M7 9h3M7 13h3M7 17h3M16 14h1M16 17h1" />
+      <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z" />
+      <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2" />
+      <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2" />
+      <path d="M10 6h4" />
+      <path d="M10 10h4" />
+      <path d="M10 14h4" />
+      <path d="M10 18h4" />
     </>
   ),
-  // Users — team
+  // Users — users
   users: (
     <>
-      <circle cx="9" cy="8" r="3.2" />
-      <path d="M3.5 20c0-3.3 2.5-5.5 5.5-5.5s5.5 2.2 5.5 5.5" />
-      <path d="M16 5.2a3.2 3.2 0 0 1 0 6.1" />
-      <path d="M17 14.7c2.3.6 4 2.6 4 5.3" />
+      <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+      <circle cx="9" cy="7" r="4" />
+      <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+      <path d="M16 3.13a4 4 0 0 1 0 7.75" />
     </>
   ),
   // More / overflow — ellipsis

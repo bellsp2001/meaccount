@@ -11,15 +11,34 @@ from schemas.tax import (
     VATReturnGenerateRequest, VATReturnResponse,
     WHTCertificateCreate, WHTCertificateResponse, WHTBulkGenerateRequest,
     VATCheckResponse, TaxPlanningRequest, TaxPlanningResponse,
+    TaxCodeCreate, TaxCodeUpdate, TaxCodeResponse,
 )
 from services.tax import (
     generate_vat_return, get_vat_returns, submit_vat_return, generate_vat_xml,
     create_wht_certificate, bulk_generate_wht_from_bills,
     get_wht_certificates, issue_certificate,
+    get_tax_codes, create_tax_code, update_tax_code,
 )
 from services.ai_tax import check_vat_compliance, plan_corporate_tax
 
 router = APIRouter(prefix="/tax", tags=["Tax Management"])
+
+
+# ── Tax Codes (ประเภทภาษี) ──────────────────────────────────────
+@router.get("/codes", response_model=List[TaxCodeResponse])
+def list_tax_codes(include_inactive: bool = True,
+                   current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return get_tax_codes(db, include_inactive)
+
+@router.post("/codes", response_model=TaxCodeResponse)
+def create_tax_code_ep(payload: TaxCodeCreate,
+                       current_user: User = Depends(require_accountant_up), db: Session = Depends(get_db)):
+    return create_tax_code(db, payload)
+
+@router.patch("/codes/{tax_code_id}", response_model=TaxCodeResponse)
+def update_tax_code_ep(tax_code_id: UUID, payload: TaxCodeUpdate,
+                       current_user: User = Depends(require_accountant_up), db: Session = Depends(get_db)):
+    return update_tax_code(db, tax_code_id, payload)
 
 
 # ── VAT Return ─────────────────────────────────────────────────

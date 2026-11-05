@@ -19,7 +19,7 @@ from fastapi import HTTPException
 
 from models.pos import POSShift, POSSale, POSSaleItem, POSPayment, ShiftStatus, SaleStatus
 from models.inventory import Product
-from models.accounting import Account, Journal, JournalEntry, JournalStatus, NormalBalance
+from models.accounting import Account, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.inventory import issue_stock
 from schemas.inventory import StockIssueCreate, StockReceiveCreate
@@ -207,6 +207,7 @@ def post_sale_to_gl(db: Session, sale_id: UUID, user_id: Optional[UUID] = None) 
     j = Journal(
         number=next_journal_number(db, sale.sold_at.date()), date=sale.sold_at.date(),
         description=f"ขายหน้าร้าน {sale.number}", reference=sale.number,
+        journal_type=JournalType.RECEIPT,  # cash sale: money in at the till
         status=JournalStatus.POSTED, created_by=user_id,
     )
     db.add(j); db.flush()

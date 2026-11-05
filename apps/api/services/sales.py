@@ -15,7 +15,7 @@ from fastapi import HTTPException
 
 from models.sales import SalesDocument, SalesDocumentItem, SalesDocType, SalesDocStatus
 from models.ar import Customer, Invoice, InvoiceStatus, Payment
-from models.accounting import Account, Journal, JournalEntry, JournalStatus, NormalBalance
+from models.accounting import Account, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.ar import _find_account, create_invoice
 from schemas.sales import SalesDocCreate, SalesItemCreate
@@ -172,7 +172,8 @@ def post_deposit_to_gl(db: Session, doc_id: UUID, user_id: Optional[UUID] = None
     journal = Journal(
         number=next_journal_number(db, doc.date), date=doc.date,
         description=f"รับเงินมัดจำ {doc.number} — {doc.customer.name}",
-        reference=doc.number, status=JournalStatus.POSTED, created_by=user_id,
+        reference=doc.number, journal_type=JournalType.RECEIPT,
+        status=JournalStatus.POSTED, created_by=user_id,
     )
     db.add(journal); db.flush()
     for ed in [

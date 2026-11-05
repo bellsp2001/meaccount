@@ -45,9 +45,11 @@ function downloadCSV(rows: ChartRow[]) {
 }
 
 // ── Reusable bits ─────────────────────────────────────────────
+const TILE_SHADOW = '0 1px 2px rgba(40,28,24,.10), 0 4px 10px -4px rgba(40,28,24,.14)'
+
 function Card({ children, style }: { children: React.ReactNode; style?: React.CSSProperties }) {
   return (
-    <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 20, padding: 20, backdropFilter: 'blur(var(--glass-blur)) saturate(170%)', WebkitBackdropFilter: 'blur(var(--glass-blur)) saturate(170%)', boxShadow: 'var(--shadow-card)', ...style }}>
+    <div style={{ background: 'var(--color-card)', borderRadius: 20, padding: 20, backdropFilter: 'blur(var(--glass-blur)) saturate(170%)', WebkitBackdropFilter: 'blur(var(--glass-blur)) saturate(170%)', boxShadow: 'var(--shadow-card)', ...style }}>
       {children}
     </div>
   )
@@ -66,8 +68,8 @@ function ChangeBadge({ pct, big }: { pct?: number | null; big?: boolean }) {
 
 function HeroStat({ icon, value, label, pct, accent }: { icon: string; value: string; label: string; pct?: number | null; accent?: boolean }) {
   return (
-    <div className="glass" style={{ display: 'inline-flex', alignItems: 'center', gap: 11, borderRadius: 15, padding: '9px 15px 9px 10px', boxShadow: 'var(--shadow-card)' }}>
-      <span style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 11, display: 'grid', placeItems: 'center', fontSize: 15, background: accent ? 'color-mix(in srgb, var(--color-accent) 18%, transparent)' : 'var(--color-bg-inset)', border: accent ? '1px solid color-mix(in srgb, var(--color-accent) 35%, transparent)' : '1px solid var(--color-border-subtle)' }}>{icon}</span>
+    <div className="card" style={{ display: 'inline-flex', alignItems: 'center', gap: 11, borderRadius: 15, padding: '9px 15px 9px 10px', boxShadow: 'var(--shadow-card)' }}>
+      <span style={{ width: 34, height: 34, flexShrink: 0, borderRadius: 11, display: 'grid', placeItems: 'center', fontSize: 15, background: accent ? 'color-mix(in srgb, var(--color-accent) 18%, transparent)' : 'var(--color-bg-inset)' }}>{icon}</span>
       <div style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
           <span style={{ fontSize: 18, fontWeight: 700, fontFamily: 'var(--font-display)', letterSpacing: '-0.01em', lineHeight: 1.05, color: accent ? 'var(--color-accent)' : 'var(--color-text)' }}>{value}</span>
@@ -115,11 +117,17 @@ export default function DashboardPage() {
   const { data: expBreak = [] } = useQuery<ExpBreak[]>({ queryKey: ['chart-exp'], queryFn: async () => (await api.get('/api/v1/dashboard/charts/expense-breakdown')).data })
   const { data: alerts = [] } = useQuery<Alert[]>({ queryKey: ['alerts'], queryFn: async () => (await api.get('/api/v1/dashboard/alerts')).data, refetchInterval: 30000 })
 
-  const totalExp = expBreak.reduce((s, e) => s + e.amount, 0)
-  const topExp = [...expBreak].sort((a, b) => b.amount - a.amount).slice(0, 6)
+  const sortedExp = [...expBreak].sort((a, b) => b.amount - a.amount)
+  const totalExp = sortedExp.reduce((s, e) => s + e.amount, 0)
+  const topExp = sortedExp.slice(0, 6)
+  const othersExp = totalExp - topExp.reduce((s, e) => s + e.amount, 0)
+  // donut + its legend render this set so arcs and percentages sum to the real total
+  const donutData = othersExp > 1 ? [...topExp, { name: 'อื่นๆ', amount: othersExp }] : topExp
   const maxExp = Math.max(1, ...topExp.map(e => e.amount))
+  const pctOf = (n: number) => (totalExp > 0 ? (n / totalExp) * 100 : 0)
   const avgRev = chart.length ? chart.reduce((s, r) => s + r.revenue, 0) / chart.length : 0
   const bestRev = Math.max(0, ...chart.map(r => r.revenue))
+  const bestRow = chart.reduce<ChartRow | undefined>((a, b) => (b.revenue > (a?.revenue ?? -Infinity) ? b : a), undefined)
   const grossMargin = kpi && kpi.revenue.amount > 0 ? (kpi.gross_profit.amount / kpi.revenue.amount) * 100 : 0
   const expRatio = kpi && kpi.revenue.amount > 0 ? (kpi.expense.amount / kpi.revenue.amount) * 100 : 0
   const onTarget = grossMargin >= 20
@@ -159,7 +167,7 @@ export default function DashboardPage() {
         <Card style={{ padding: 22 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>รายได้ &amp; ค่าใช้จ่าย <span style={{ color: 'var(--color-dim)', fontWeight: 500 }}>· {months} เดือน · {chart.length} จุดข้อมูล</span></p>
-            <button onClick={() => downloadCSV(chart)} disabled={!chart.length} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border-subtle)', borderRadius: 9, padding: '6px 12px', cursor: chart.length ? 'pointer' : 'not-allowed' }}>⤓ Export CSV</button>
+            <button onClick={() => downloadCSV(chart)} disabled={!chart.length} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)', background: 'var(--color-bg-inset)', border: 'none', boxShadow: TILE_SHADOW, borderRadius: 9, padding: '6px 12px', cursor: chart.length ? 'pointer' : 'not-allowed' }}>⤓ Export CSV</button>
           </div>
 
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', margin: '14px 0 2px' }}>
@@ -168,16 +176,17 @@ export default function DashboardPage() {
             <ChangeBadge pct={kpi?.revenue.change_pct} big />
           </div>
 
-          {/* mini stat boxes */}
+          {/* mini stat boxes — label / value / sub-detail (tavola style) */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, margin: '14px 0 6px' }}>
             {[
-              { l: 'เดือนที่สูงสุด', v: fmtB(bestRev) },
-              { l: 'เฉลี่ย/เดือน', v: fmtB(avgRev) },
-              { l: 'กำไรขั้นต้น', v: kpi ? fmtB(kpi.gross_profit.amount) : '—' },
+              { l: 'เดือนที่สูงสุด', v: fmtB(bestRev), s: bestRow?.month_th ?? '—' },
+              { l: 'เฉลี่ย/เดือน', v: fmtB(avgRev), s: `${chart.length} เดือน` },
+              { l: 'กำไรขั้นต้น', v: kpi ? fmtB(kpi.gross_profit.amount) : '—', s: kpi && kpi.revenue.amount > 0 ? `${grossMargin.toFixed(1)}% margin` : '—' },
             ].map(b => (
-              <div key={b.l} style={{ background: 'var(--color-bg-inset)', border: '1px solid var(--color-border-subtle)', borderRadius: 13, padding: '11px 13px' }}>
-                <p style={{ margin: '0 0 3px', fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{b.v}</p>
-                <p style={{ margin: 0, fontSize: 10.5, color: 'var(--color-muted)' }}>{b.l}</p>
+              <div key={b.l} style={{ background: 'var(--color-bg-inset)', boxShadow: TILE_SHADOW, borderRadius: 13, padding: '11px 13px' }}>
+                <p style={{ margin: '0 0 4px', fontSize: 10.5, color: 'var(--color-muted)' }}>{b.l}</p>
+                <p style={{ margin: '0 0 2px', fontSize: 16, fontWeight: 700, fontFamily: 'var(--font-display)' }}>{b.v}</p>
+                <p style={{ margin: 0, fontSize: 9.5, color: 'var(--color-dim)' }}>{b.s}</p>
               </div>
             ))}
           </div>
@@ -217,8 +226,8 @@ export default function DashboardPage() {
               <div style={{ position: 'relative', height: 170 }}>
                 <ResponsiveContainer width="100%" height="100%">
                   <PieChart>
-                    <Pie data={topExp} dataKey="amount" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={82} paddingAngle={2} stroke="none">
-                      {topExp.map((_, i) => <Cell key={i} fill={MIX[i % MIX.length]} />)}
+                    <Pie data={donutData} dataKey="amount" nameKey="name" cx="50%" cy="50%" innerRadius={58} outerRadius={82} paddingAngle={2} stroke="none">
+                      {donutData.map((d, i) => <Cell key={i} fill={d.name === 'อื่นๆ' ? '#5A6478' : MIX[i % MIX.length]} />)}
                     </Pie>
                   </PieChart>
                 </ResponsiveContainer>
@@ -227,21 +236,29 @@ export default function DashboardPage() {
                   <span style={{ fontSize: 10.5, color: 'var(--color-muted)' }}>รวมค่าใช้จ่าย</span>
                 </div>
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 10 }}>
-                {topExp.map((e, i) => (
-                  <div key={e.name}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, minWidth: 0, fontSize: 12, color: 'var(--color-text-secondary)' }}>
-                        <i style={{ width: 8, height: 8, borderRadius: 2, background: MIX[i % MIX.length], flexShrink: 0 }} />
-                        <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 11, marginTop: 10 }}>
+                {donutData.map((e, i) => {
+                  const c = e.name === 'อื่นๆ' ? '#5A6478' : MIX[i % MIX.length]
+                  return (
+                    <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                      <span style={{ width: 26, height: 26, flexShrink: 0, borderRadius: 8, background: `color-mix(in srgb, ${c} 20%, transparent)`, border: `1px solid ${c}`, display: 'grid', placeItems: 'center' }}>
+                        <i style={{ width: 8, height: 8, borderRadius: 2, background: c }} />
                       </span>
-                      <span style={{ fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{fmtB(e.amount)}</span>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                          <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
+                          <span style={{ fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{fmtB(e.amount)}</span>
+                        </div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 3 }}>
+                          <div style={{ flex: 1, height: 4, borderRadius: 999, background: 'var(--color-bg-inset)', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${pctOf(e.amount)}%`, background: c, borderRadius: 999 }} />
+                          </div>
+                          <span style={{ fontSize: 10, color: 'var(--color-muted)', flexShrink: 0, minWidth: 64, textAlign: 'right' }}>{pctOf(e.amount).toFixed(1)}% ของทั้งหมด</span>
+                        </div>
+                      </div>
                     </div>
-                    <div style={{ height: 5, borderRadius: 999, background: 'var(--color-bg-inset)', overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: `${totalExp > 0 ? (e.amount / totalExp) * 100 : 0}%`, background: MIX[i % MIX.length], borderRadius: 999 }} />
-                    </div>
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </>
           ) : (
@@ -291,10 +308,11 @@ export default function DashboardPage() {
                 <div key={e.name} style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
                   <span style={{ width: 22, height: 22, flexShrink: 0, borderRadius: 7, display: 'grid', placeItems: 'center', fontSize: 11, fontWeight: 700, color: MIX[i % MIX.length], background: `color-mix(in srgb, ${MIX[i % MIX.length]} 16%, transparent)` }}>{i + 1}</span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 5 }}>
-                      <span style={{ fontSize: 12.5, color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 2 }}>
+                      <span style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--color-text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{e.name}</span>
                       <span style={{ fontSize: 12.5, fontWeight: 700, flexShrink: 0 }}>{fmtB(e.amount)}</span>
                     </div>
+                    <p style={{ margin: '0 0 5px', fontSize: 10, color: 'var(--color-dim)' }}>{pctOf(e.amount).toFixed(1)}% ของค่าใช้จ่าย</p>
                     <div style={{ height: 6, borderRadius: 999, background: 'var(--color-bg-inset)', overflow: 'hidden' }}>
                       <div style={{ height: '100%', width: `${(e.amount / maxExp) * 100}%`, borderRadius: 999, background: `linear-gradient(90deg, ${MIX[i % MIX.length]}, color-mix(in srgb, ${MIX[i % MIX.length]} 55%, white))`, transition: 'width 0.6s ease' }} />
                     </div>
@@ -367,7 +385,6 @@ function Heatmap({ rows }: { rows: ChartRow[] }) {
                     <div key={i} title={`${r.month_th}: ${fmtB(Number(r[m.key]) || 0)}`} style={{
                       flex: 1, height: 34, borderRadius: 8, display: 'grid', placeItems: 'center',
                       background: `color-mix(in srgb, ${m.color} ${Math.round(intensity * 100)}%, transparent)`,
-                      border: '1px solid var(--color-border-subtle)',
                     }} />
                   )
                 })}
@@ -388,7 +405,7 @@ function Heatmap({ rows }: { rows: ChartRow[] }) {
 
 const listRow: React.CSSProperties = {
   display: 'flex', alignItems: 'center', gap: 10, textDecoration: 'none',
-  background: 'var(--color-bg-inset)', border: '1px solid var(--color-border-subtle)',
+  background: 'var(--color-bg-inset)', boxShadow: TILE_SHADOW,
   borderRadius: 12, padding: '11px 13px', color: 'inherit',
 }
 const countPill: React.CSSProperties = {

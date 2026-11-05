@@ -3,7 +3,7 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import date
 from decimal import Decimal
-from models.accounting import AccountTypeEnum, NormalBalance, JournalStatus
+from models.accounting import AccountTypeEnum, NormalBalance, JournalStatus, JournalType, BookSide
 
 
 # ── Account Schemas ────────────────────────────────────────────
@@ -87,9 +87,10 @@ class JournalEntryResponse(BaseModel):
 
 # ── Journal Schemas ────────────────────────────────────────────
 class JournalCreate(BaseModel):
-    date:        date
-    description: str
-    reference:   Optional[str] = None
+    date:         date
+    description:  str
+    journal_type: JournalType = JournalType.GENERAL
+    reference:    Optional[str] = None
     note:        Optional[str] = None
     entries:     List[JournalEntryCreate]
 
@@ -112,11 +113,106 @@ class JournalResponse(BaseModel):
     description:  str
     reference:    Optional[str]
     status:       JournalStatus
+    journal_type: JournalType
     note:         Optional[str]
     ai_suggested: bool
     entries:      List[JournalEntryResponse] = []
     total_debit:  Optional[Decimal] = None
     total_credit: Optional[Decimal] = None
+
+    model_config = {"from_attributes": True}
+
+
+# ── Document Book (สมุดบันทึก) ─────────────────────────────────
+class DocumentBookCreate(BaseModel):
+    code:               str
+    name:               str
+    side:               BookSide
+    journal_type:       JournalType
+    account_id:         UUID
+    counter_account_id: Optional[UUID] = None
+    tax_code_id:        Optional[UUID] = None
+    description:        Optional[str] = None
+
+    @field_validator("code")
+    @classmethod
+    def code_format(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not v:
+            raise ValueError("ระบุรหัสสมุด")
+        return v
+
+    @field_validator("name")
+    @classmethod
+    def name_len(cls, v: str) -> str:
+        v = v.strip()
+        if len(v) < 2:
+            raise ValueError("ชื่อสมุดต้องมีอย่างน้อย 2 ตัวอักษร")
+        return v
+
+
+class DocumentBookUpdate(BaseModel):
+    # side is fixed: it decides which menu the book lives in and which accounts are valid.
+    code:               Optional[str] = None
+    name:               Optional[str] = None
+    journal_type:       Optional[JournalType] = None
+    account_id:         Optional[UUID] = None
+    counter_account_id: Optional[UUID] = None
+    tax_code_id:        Optional[UUID] = None
+    description:        Optional[str] = None
+    is_active:          Optional[bool] = None
+    # Explicit clears, because None above means "leave unchanged".
+    clear_counter_account: bool = False
+    clear_tax_code:        bool = False
+
+    @field_validator("code")
+    @classmethod
+    def code_format(cls, v: Optional[str]) -> Optional[str]:
+        return v.strip().upper() if v is not None else v
+
+
+class BookAccountRef(BaseModel):
+    id:   UUID
+    code: str
+    name: str
+
+    model_config = {"from_attributes": True}
+
+
+class BookTaxRef(BaseModel):
+    id:   UUID
+    code: str
+    name: str
+    kind: str      # "vat" | "wht" — lets a bill form fill the right rate field
+    rate: Decimal
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentBookRef(BaseModel):
+    """Compact book shown on invoices/bills."""
+    id:           UUID
+    code:         str
+    name:         str
+    journal_type: JournalType
+
+    model_config = {"from_attributes": True}
+
+
+class DocumentBookResponse(BaseModel):
+    id:                 UUID
+    code:               str
+    name:               str
+    side:               BookSide
+    journal_type:       JournalType
+    account_id:         UUID
+    counter_account_id: Optional[UUID]
+    tax_code_id:        Optional[UUID]
+    description:        Optional[str]
+    is_active:          bool
+    account:            Optional[BookAccountRef] = None
+    counter_account:    Optional[BookAccountRef] = None
+    tax_code:           Optional[BookTaxRef] = None
 
     model_config = {"from_attributes": True}
 

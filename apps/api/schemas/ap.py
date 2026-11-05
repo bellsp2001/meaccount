@@ -4,6 +4,7 @@ from uuid import UUID
 from datetime import date
 from decimal import Decimal
 from models.ap import BillStatus, APPaymentMethod
+from schemas.accounting import DocumentBookRef
 
 
 # ── ExpenseCategory ────────────────────────────────────────────
@@ -118,6 +119,7 @@ class BillCreate(BaseModel):
     vat_rate:     Decimal = Decimal("7")
     wht_rate:     Decimal = Decimal("0")
     note:         Optional[str] = None
+    book_id:      Optional[UUID] = None   # สมุดบันทึก (expense side)
     items:        List[BillItemCreate]
 
     @field_validator("items")
@@ -152,6 +154,8 @@ class BillResponse(BaseModel):
     note:          Optional[str]
     gl_posted:     bool
     ai_categorized:bool
+    book_id:       Optional[UUID] = None
+    book:          Optional[DocumentBookRef] = None
     items:         List[BillItemResponse] = []
     model_config = {"from_attributes": True}
 

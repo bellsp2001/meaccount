@@ -4,6 +4,7 @@ import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
+import { DocumentBookSelect, useDocumentBooks } from '@/components/books/DocumentBookSelect'
 
 interface Supplier     { id: string; code: string; name: string; payment_terms: number; wht_type?: string }
 interface ExpCategory  { id: string; code: string; name: string }
@@ -16,6 +17,7 @@ interface Bill {
   wht_rate: number; wht_amount: number; total: number; net_payable: number
   paid_amount: number; balance_due: number; note?: string; gl_posted: boolean
   ai_categorized: boolean; items: BillItem[]
+  book?: { code: string; name: string } | null
 }
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
@@ -44,6 +46,7 @@ const billSchema = z.object({
   vat_rate:     z.number().min(0).max(100),
   wht_rate:     z.number().min(0).max(100),
   note:         z.string().optional(),
+  book_id:      z.string().optional(),
   items:        z.array(itemSchema).min(1),
 })
 type BForm = z.infer<typeof billSchema>
@@ -74,7 +77,14 @@ export default function BillPage() {
   const { data: suppliers = [] } = useQuery<Supplier[]>({ queryKey: ['suppliers'], queryFn: async () => (await api.get('/api/v1/ap/suppliers')).data })
   const { data: categories = [] } = useQuery<ExpCategory[]>({ queryKey: ['categories'], queryFn: async () => (await api.get('/api/v1/ap/categories')).data })
 
-  const createM  = useMutation({ mutationFn: (d: BForm) => api.post('/api/v1/ap/bills', d), onSuccess: () => { qc.invalidateQueries({ queryKey: ['bills'] }); setShowCreate(false); reset() } })
+  // "— ไม่ระบุ —" selects submit "", which the API rejects as a UUID/date — send those as absent.
+  const createM  = useMutation({
+    mutationFn: (d: BForm) => api.post('/api/v1/ap/bills', {
+      ...d, supplier_id: d.supplier_id || undefined, category_id: d.category_id || undefined,
+      due_date: d.due_date || undefined, book_id: d.book_id || undefined,
+    }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['bills'] }); setShowCreate(false); reset() },
+  })
   const submitM  = useMutation({ mutationFn: (id: string) => api.post(`/api/v1/ap/bills/${id}/submit`), onSuccess: () => qc.invalidateQueries({ queryKey: ['bills'] }) })
   const approveM = useMutation({
     mutationFn: ({ id, action, comment }: { id: string; action: string; comment?: string }) =>
@@ -89,12 +99,26 @@ export default function BillPage() {
 
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<BForm>({
     resolver: zodResolver(billSchema),
-    defaultValues: { date: new Date().toISOString().split('T')[0], vat_rate: 7, wht_rate: 0, items: [{ description: '', quantity: 1, unit_price: 0 }] },
+    defaultValues: { date: new Date().toISOString().split('T')[0], vat_rate: 7, wht_rate: 0, book_id: '', items: [{ description: '', quantity: 1, unit_price: 0 }] },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchItems = watch('items')
-  const watchVAT   = watch('vat_rate') || 7
+  // Not `|| 7`: a 0% bill must preview as 0, not fall back to 7.
+  const vatInput   = watch('vat_rate')
+  const watchVAT   = Number.isFinite(vatInput) ? vatInput : 0
   const watchWHT   = watch('wht_rate') || 0
+  // Offer every common WHT rate plus whatever a book filled in, so the select never shows a stale value.
+  const whtRates   = Array.from(new Set([0, 1, 2, 3, 5, watchWHT])).sort((a, b) => a - b)
+
+  // Picking a book fills the rate of its tax type (VAT or WHT); both fields stay editable.
+  const { data: expenseBooks = [] } = useDocumentBooks('expense')
+  const bookField = register('book_id', {
+    onChange: e => {
+      const tax = expenseBooks.find(b => b.id === e.target.value)?.tax_code
+      if (tax?.kind === 'vat') setValue('vat_rate', Number(tax.rate))
+      if (tax?.kind === 'wht') setValue('wht_rate', Number(tax.rate))
+    },
+  })
   const subtotal   = watchItems.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.unit_price) || 0), 0)
   const vatAmt     = subtotal * watchVAT / 100
   const whtAmt     = subtotal * watchWHT / 100
@@ -300,6 +324,7 @@ export default function BillPage() {
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <DocumentBookSelect side="expense" field={bookField} value={watch('book_id')} inputStyle={inp} labelStyle={lbl} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={lbl}>ผู้จำหน่าย</label>
@@ -333,10 +358,7 @@ export default function BillPage() {
               <div>
                 <label style={lbl}>ภาษีหัก ณ ที่จ่าย (%)</label>
                 <select {...register('wht_rate', { valueAsNumber: true })} style={{ ...inp, cursor: 'pointer', width: 200 }}>
-                  <option value={0}>ไม่หัก (0%)</option>
-                  <option value={1}>1%</option>
-                  <option value={3}>3%</option>
-                  <option value={5}>5%</option>
+                  {whtRates.map(r => <option key={r} value={r}>{r === 0 ? 'ไม่หัก (0%)' : `${r}%`}</option>)}
                 </select>
               </div>
 
@@ -391,7 +413,7 @@ export default function BillPage() {
                 </div>
               </div>
 
-              {createM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล</p></div>}
+              {createM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>{typeof (createM.error as any)?.response?.data?.detail === 'string' ? (createM.error as any).response.data.detail : 'เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล'}</p></div>}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
                 <button type="submit" disabled={createM.isPending} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 24px', cursor: 'pointer', opacity: createM.isPending ? 0.7 : 1 }}>

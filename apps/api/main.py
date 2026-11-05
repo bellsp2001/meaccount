@@ -14,7 +14,7 @@ TESTING = os.getenv("TESTING", "false").lower() == "true"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not TESTING:
+    if not TESTING and settings.AUTO_CREATE_SCHEMA:
         Base.metadata.create_all(bind=engine)
     yield
 

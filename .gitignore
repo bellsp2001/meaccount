@@ -7,6 +7,7 @@ __pycache__/
 dist/
 build/
 .vite/
+*.tsbuildinfo
 *.egg-info/
 .venv/
 venv/
@@ -15,3 +16,5 @@ venv/
 .pytest_cache/
 .mypy_cache/
 .ruff_cache/
+# Local SQLite databases (dev data + per-test files) — production uses PostgreSQL
+*.db

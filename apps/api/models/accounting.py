@@ -26,6 +26,15 @@ class JournalStatus(str, enum.Enum):
     REVERSED = "reversed"
 
 
+class JournalType(str, enum.Enum):
+    """The five Thai books of original entry (สมุดรายวัน 5 เล่ม)."""
+    GENERAL  = "general"    # สมุดรายวันทั่วไป
+    SALES    = "sales"      # สมุดรายวันขาย
+    PURCHASE = "purchase"   # สมุดรายวันซื้อ
+    RECEIPT  = "receipt"    # สมุดรายวันรับเงิน
+    PAYMENT  = "payment"    # สมุดรายวันจ่ายเงิน
+
+
 class Account(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "accounts"
     __table_args__ = (
@@ -64,6 +73,9 @@ class Journal(Base, UUIDMixin, TimestampMixin):
     description  = Column(String(500), nullable=False)
     reference    = Column(String(100), nullable=True)
     status       = Column(Enum(JournalStatus), default=JournalStatus.DRAFT, nullable=False)
+    # server_default lets existing rows (added before this column) read as the general journal.
+    journal_type = Column(Enum(JournalType), default=JournalType.GENERAL, nullable=False,
+                          server_default=JournalType.GENERAL.name, index=True)
     created_by   = Column(UUIDType(), ForeignKey("users.id"), nullable=True)
     posted_by    = Column(UUIDType(), ForeignKey("users.id"), nullable=True)
     note         = Column(Text, nullable=True)
@@ -80,6 +92,33 @@ class Journal(Base, UUIDMixin, TimestampMixin):
     creator = relationship("User", foreign_keys=[created_by])
     poster  = relationship("User", foreign_keys=[posted_by])
     company = relationship("Company", foreign_keys=[company_id])
+
+
+class BookSide(str, enum.Enum):
+    INCOME  = "income"    # รายได้
+    EXPENSE = "expense"   # ค่าใช้จ่าย
+
+
+class DocumentBook(Base, UUIDMixin, TimestampMixin):
+    """สมุดบันทึกเอกสาร — a kind of source document (e.g. ใบแจ้งหนี้/ใบกำกับภาษี) and how it is
+    booked: which of the five journals it posts to and which accounts it hits."""
+    __tablename__ = "document_books"
+
+    code         = Column(String(20),  nullable=False, unique=True, index=True)   # "INV", "EXP"
+    name         = Column(String(200), nullable=False)
+    side         = Column(Enum(BookSide), nullable=False, index=True)
+    journal_type = Column(Enum(JournalType), nullable=False)
+    # The income / expense account — what the user picks as "ประเภทรายได้/ค่าใช้จ่าย".
+    account_id         = Column(UUIDType(), ForeignKey("accounts.id"), nullable=False)
+    # The other side: ลูกหนี้/เจ้าหนี้ for credit documents, เงินสด/ธนาคาร for cash ones.
+    counter_account_id = Column(UUIDType(), ForeignKey("accounts.id"), nullable=True)
+    tax_code_id  = Column(UUIDType(), ForeignKey("tax_codes.id"), nullable=True)
+    description  = Column(Text, nullable=True)
+    is_active    = Column(Boolean, default=True, nullable=False)
+
+    account         = relationship("Account", foreign_keys=[account_id])
+    counter_account = relationship("Account", foreign_keys=[counter_account_id])
+    tax_code        = relationship("TaxCode", foreign_keys=[tax_code_id])
 
 
 class JournalEntry(Base, UUIDMixin):

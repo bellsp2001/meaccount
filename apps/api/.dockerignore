@@ -1,0 +1,12 @@
+# Keep secrets, local databases and dev artifacts out of the image.
+.env
+.env.*
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+*.db
+.pytest_cache/
+tests/
+loadtest/
+Dockerfile.dev

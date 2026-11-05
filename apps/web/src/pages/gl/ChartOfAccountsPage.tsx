@@ -13,6 +13,7 @@ interface Account {
   id: string; code: string; name: string; name_en: string | null
   account_type: AccountType; normal_balance: NormalBalance
   level: number; is_active: boolean; balance: number
+  description: string | null
   parent_id: string | null; children: Account[]
 }
 
@@ -35,8 +36,18 @@ const createSchema = z.object({
 })
 type CForm = z.infer<typeof createSchema>
 
+// Only what PATCH /accounts/{id} accepts — code, type and normal balance are fixed once created
+// so posted journal lines keep their meaning.
+const editSchema = z.object({
+  name:        z.string().min(2, 'ชื่อต้องมีอย่างน้อย 2 ตัวอักษร'),
+  name_en:     z.string().optional(),
+  description: z.string().optional(),
+  is_active:   z.boolean(),
+})
+type EForm = z.infer<typeof editSchema>
+
 // ── Account Row (recursive tree) ──────────────────────────────
-function AccountRow({ acc, depth, onSelect }: { acc: Account; depth: number; onSelect: (a: Account) => void }) {
+function AccountRow({ acc, depth, onSelect, onEdit }: { acc: Account; depth: number; onSelect: (a: Account) => void; onEdit: (a: Account) => void }) {
   const [open, setOpen] = useState(depth < 1)
   const meta = TYPE_META[acc.account_type]
   const hasChildren = acc.children?.length > 0
@@ -61,7 +72,7 @@ function AccountRow({ acc, depth, onSelect }: { acc: Account; depth: number; onS
           </div>
         </td>
         <td style={{ padding: '10px 16px', fontSize: 11 }}>
-          <span style={{ color: meta.color, background: meta.color + '15', border: `1px solid ${meta.color}30`, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', color: meta.color, background: meta.color + '15', border: `1px solid ${meta.color}30`, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
             {meta.icon} {meta.label}
           </span>
         </td>
@@ -72,11 +83,17 @@ function AccountRow({ acc, depth, onSelect }: { acc: Account; depth: number; onS
           {balance !== 0 ? balance.toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '—'}
         </td>
         <td style={{ padding: '10px 16px' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: acc.is_active ? '#43E97B' : '#FF6B6B', display: 'inline-block' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span title={acc.is_active ? 'ใช้งาน' : 'ปิดใช้งาน'} style={{ width: 6, height: 6, borderRadius: '50%', background: acc.is_active ? '#43E97B' : '#FF6B6B', display: 'inline-block', flexShrink: 0 }} />
+            <button onClick={e => { e.stopPropagation(); onEdit(acc) }} title="แก้ไขบัญชี" aria-label={`แก้ไขบัญชี ${acc.code}`}
+              style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center', background: 'var(--color-bg-inset)', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', padding: 0, flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+            </button>
+          </div>
         </td>
       </tr>
       {open && hasChildren && acc.children.map(child => (
-        <AccountRow key={child.id} acc={child} depth={depth + 1} onSelect={onSelect} />
+        <AccountRow key={child.id} acc={child} depth={depth + 1} onSelect={onSelect} onEdit={onEdit} />
       ))}
     </>
   )
@@ -105,6 +122,22 @@ export default function ChartOfAccountsPage() {
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<CForm>({
     resolver: zodResolver(createSchema),
     defaultValues: { account_type: 'asset', normal_balance: 'debit', level: 3 },
+  })
+
+  const [editing, setEditing] = useState<Account | null>(null)
+  const editForm = useForm<EForm>({ resolver: zodResolver(editSchema) })
+  const openEdit = (a: Account) => {
+    editForm.reset({ name: a.name, name_en: a.name_en ?? '', description: a.description ?? '', is_active: a.is_active })
+    updateM.reset()
+    setEditing(a)
+  }
+  const updateM = useMutation({
+    mutationFn: (d: EForm) => api.patch<Account>(`/api/v1/accounts/${editing!.id}`, d),
+    onSuccess: ({ data }) => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      if (selected?.id === data.id) setSelected({ ...selected, ...data, children: selected.children })
+      setEditing(null)
+    },
   })
 
   // Auto-set normal balance based on type
@@ -171,7 +204,10 @@ export default function ChartOfAccountsPage() {
             <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)' }}>Normal Balance</p><p style={{ margin: 0, fontSize: 12, fontWeight: 700 }}>{selected.normal_balance === 'debit' ? 'Debit (Dr)' : 'Credit (Cr)'}</p></div>
             <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)' }}>ยอดคงเหลือ</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#F2714E' }}>฿ {Number(selected.balance).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</p></div>
           </div>
-          <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 16 }}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => openEdit(selected)} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: 'var(--color-bg-inset)', color: 'var(--color-text)', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>✎ แก้ไข</button>
+            <button onClick={() => setSelected(null)} aria-label="ปิด" style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 16 }}>✕</button>
+          </div>
         </div>
       )}
 
@@ -190,8 +226,8 @@ export default function ChartOfAccountsPage() {
             </thead>
             <tbody>
               {search
-                ? flatSearch(accounts, search).map(a => <AccountRow key={a.id} acc={a} depth={0} onSelect={setSelected} />)
-                : accounts.map(a => <AccountRow key={a.id} acc={a} depth={0} onSelect={setSelected} />)
+                ? flatSearch(accounts, search).map(a => <AccountRow key={a.id} acc={a} depth={0} onSelect={setSelected} onEdit={openEdit} />)
+                : accounts.map(a => <AccountRow key={a.id} acc={a} depth={0} onSelect={setSelected} onEdit={openEdit} />)
               }
             </tbody>
           </table>
@@ -263,6 +299,61 @@ export default function ChartOfAccountsPage() {
                 <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '10px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
                 <button type="submit" disabled={createM.isPending} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer', opacity: createM.isPending ? 0.7 : 1 }}>
                   {createM.isPending ? 'กำลังบันทึก...' : 'สร้างบัญชี'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {editing && (
+        <div style={overlay} onClick={() => setEditing(null)}>
+          <div style={modal} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>แก้ไขบัญชี <span style={{ fontFamily: 'monospace', color: 'var(--color-muted)' }}>{editing.code}</span></h3>
+              <button onClick={() => setEditing(null)} aria-label="ปิด" style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            </div>
+            <form onSubmit={editForm.handleSubmit(d => updateM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Fixed fields — shown for context, not editable */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, background: 'var(--color-bg-inset)', borderRadius: 10, padding: '10px 14px' }}>
+                {[
+                  ['รหัสบัญชี', editing.code],
+                  ['ประเภท', TYPE_META[editing.account_type].label],
+                  ['Normal Balance', editing.normal_balance === 'debit' ? 'Debit (Dr)' : 'Credit (Cr)'],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ minWidth: 0 }}>
+                    <p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{k}</p>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</p>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: '-8px 0 0', fontSize: 11, color: 'var(--color-dim)' }}>รหัส ประเภท และ Normal Balance แก้ไขไม่ได้หลังสร้างบัญชี เพื่อไม่ให้รายการที่ลงบัญชีไว้แล้วผิดความหมาย</p>
+              <div>
+                <label style={lbl}>ชื่อบัญชี (ไทย)</label>
+                <input {...editForm.register('name')} style={inp} />
+                {editForm.formState.errors.name && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#FF6B6B' }}>{editForm.formState.errors.name.message}</p>}
+              </div>
+              <div>
+                <label style={lbl}>ชื่อบัญชี (อังกฤษ)</label>
+                <input {...editForm.register('name_en')} placeholder="Cash" style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>หมายเหตุ</label>
+                <textarea {...editForm.register('description')} rows={2} placeholder="คำอธิบายบัญชีเพิ่มเติม (ไม่บังคับ)" style={{ ...inp, resize: 'vertical' }} />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: 'var(--color-bg-inset)', borderRadius: 10, padding: '12px 14px', cursor: 'pointer' }}>
+                <span>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>เปิดใช้งานบัญชี</span>
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--color-muted)' }}>ปิดเพื่อเลิกใช้บัญชีนี้โดยยังเก็บประวัติรายการไว้</span>
+                </span>
+                <input type="checkbox" {...editForm.register('is_active')} style={{ width: 18, height: 18, accentColor: '#F2714E', cursor: 'pointer', flexShrink: 0 }} />
+              </label>
+              {updateM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>บันทึกไม่สำเร็จ กรุณาลองใหม่</p></div>}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setEditing(null)} style={{ padding: '10px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
+                <button type="submit" disabled={updateM.isPending} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer', opacity: updateM.isPending ? 0.7 : 1 }}>
+                  {updateM.isPending ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
                 </button>
               </div>
             </form>

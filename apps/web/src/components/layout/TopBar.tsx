@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth'
 import { useCompanyStore, type Company } from '@/store/company'
@@ -13,56 +13,57 @@ export function TopBar() {
   const apps = allowedNav(user?.role)
   const active = findActiveNav(pathname, apps)
   const title = active?.label ?? 'MeAccount'
-  const subtabs = active?.children ?? []
-  const tint = active ? navTint(NAV.indexOf(active)) : undefined
+  // By route, not identity: allowedNav() returns copies when it filters sub-items by role.
+  const tint = active ? navTint(NAV.findIndex(n => n.to === active.to)) : undefined
 
   return (
-    <header className="glass-bar" style={{
+    <header className="chrome-panel" style={{
       display: 'flex', flexDirection: 'column', gap: 10, padding: '11px 18px', flexShrink: 0,
-      borderRadius: 20, border: '1px solid var(--color-border)', boxShadow: 'var(--shadow-card)',
+      borderRadius: 26,
     }}>
-      {/* Row 1 — active module title · sub-menu · user cluster */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+      <style>{TB_CSS}</style>
+      {/* Active module title · user cluster. The row (not the header) is the size container: containment
+          would make the header its own stacking context and break the shared .chrome-panel shadow layer. */}
+      <div className="tb-row" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
         {/* Left — active-module icon + name */}
-        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 11 }}>
-          {tint && <IconTile icon={active!.icon} tint={tint} active size={36} />}
+        <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 11 }}>
+          {tint && <span className="tb-tile" style={{ display: 'flex', flexShrink: 0 }}><IconTile icon={active!.icon} tint={tint} active size={36} /></span>}
           <div style={{ minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--color-accent)', display: 'flex', alignItems: 'center', gap: 5 }}>
+            <p className="tb-kicker" style={{ margin: 0, fontSize: 8.5, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--color-accent)', display: 'flex', alignItems: 'center', gap: 5, whiteSpace: 'nowrap' }}>
               <span style={{ width: 5, height: 5, borderRadius: '50%', background: 'var(--color-accent)', boxShadow: '0 0 8px var(--color-accent)' }} /> กำลังใช้งาน
             </p>
-            <h1 style={{ margin: 0, fontSize: 21, fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em', lineHeight: 1.05, whiteSpace: 'nowrap' }}>{title}</h1>
+            <h1 className="tb-title" title={title} style={{ margin: 0, fontSize: 21, fontWeight: 800, fontFamily: 'var(--font-display)', letterSpacing: '-0.03em', lineHeight: 1.05, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{title}</h1>
           </div>
         </div>
 
-        {/* Center — sub-menu pills of the active module */}
-        <nav className="nav-scroll" style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 6, overflowX: 'auto' }}>
-          {subtabs.map(t => (
-            <NavLink key={t.to} to={t.to} end style={({ isActive }) => ({
-              padding: '7px 15px', borderRadius: 999, fontSize: 12.5, whiteSpace: 'nowrap', textDecoration: 'none',
-              fontWeight: isActive ? 700 : 500, transition: 'all 0.15s', flexShrink: 0,
-              color: isActive ? 'var(--color-on-accent)' : 'var(--color-text-secondary)',
-              background: isActive ? 'var(--color-accent)' : 'color-mix(in srgb, var(--color-text) 6%, transparent)',
-              boxShadow: isActive ? '0 6px 16px -6px color-mix(in srgb, var(--color-accent) 70%, transparent)' : 'none',
-            })}>{t.label}</NavLink>
-          ))}
-        </nav>
-
         {/* Right — one translucent frame: theme · notifications · company · user */}
-        <div className="glass" style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, padding: 5, borderRadius: 14, boxShadow: 'var(--shadow-card)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, padding: 5, borderRadius: 14,
+          background: 'var(--chrome-hover)',
+          boxShadow: '0 1px 3px rgba(40,30,70,.12), 0 6px 12px -4px rgba(40,30,70,.18)' }}>
           <ThemeToggle />
-          <button title="การแจ้งเตือน" style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', color: 'var(--color-text-secondary)', cursor: 'pointer', fontSize: 15, position: 'relative' }}>
+          <button className="tb-bell" title="การแจ้งเตือน" style={{ width: 32, height: 32, borderRadius: 9, display: 'grid', placeItems: 'center', background: 'transparent', border: 'none', color: 'var(--chrome-text-soft)', cursor: 'pointer', fontSize: 15, position: 'relative' }}>
             🔔
-            <span style={{ position: 'absolute', top: 4, right: 6, width: 8, height: 8, borderRadius: '50%', background: '#FF4D6D', boxShadow: '0 0 0 2px var(--color-card-solid)' }} />
+            <span style={{ position: 'absolute', top: 4, right: 6, width: 8, height: 8, borderRadius: '50%', background: '#FF4D6D' }} />
           </button>
-          <span style={{ width: 1, height: 20, background: 'var(--color-border)', flexShrink: 0 }} />
+          <span className="tb-company" style={{ width: 1, height: 20, background: 'var(--chrome-line)', flexShrink: 0 }} />
           <CompanyChip />
-          <span style={{ width: 1, height: 20, background: 'var(--color-border)', flexShrink: 0 }} />
+          <span style={{ width: 1, height: 20, background: 'var(--chrome-line)', flexShrink: 0 }} />
           <UserChip name={user?.full_name} role={user?.role} onLogout={() => { logout(); navigate('/login') }} />
         </div>
       </div>
     </header>
   )
 }
+
+// Steps down by the bar's own width, which also changes when the sidebar collapses:
+// chip labels go first, then the company switcher, then the module tile and kicker, then the bell.
+const TB_CSS = `
+.tb-row { container-type: inline-size; }
+@container (max-width: 640px) { .tb-label { display: none !important; } }
+@container (max-width: 420px) { .tb-company { display: none !important; } }
+@container (max-width: 300px) { .tb-tile, .tb-kicker { display: none !important; } }
+@container (max-width: 220px) { .tb-bell { display: none !important; } }
+`
 
 function CompanyChip() {
   const [open, setOpen] = useState(false)
@@ -80,14 +81,14 @@ function CompanyChip() {
   const branch = !current ? 'ยังไม่ตั้งค่าบริษัท' : current.parent_company_id ? 'บริษัทในเครือ' : 'สำนักงานใหญ่'
 
   return (
-    <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '3px 6px', borderRadius: 10, background: 'transparent', border: 'none', cursor: 'pointer', maxWidth: 200 }}>
+    <div ref={ref} className="tb-company" style={{ position: 'relative' }}>
+      <button onClick={() => setOpen(o => !o)} title={name} style={{ display: 'flex', alignItems: 'center', gap: 9, padding: '3px 6px', borderRadius: 10, background: 'transparent', border: 'none', cursor: 'pointer', maxWidth: 200 }}>
         <span style={{ width: 26, height: 26, borderRadius: 8, flexShrink: 0, display: 'grid', placeItems: 'center', fontSize: 13, background: 'linear-gradient(135deg,#3B6FE0,#5A5CE0)', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)' }}>🏢</span>
-        <span style={{ minWidth: 0, textAlign: 'left' }}>
+        <span className="tb-label" style={{ minWidth: 0, textAlign: 'left' }}>
           <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--color-text)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
           <span style={{ display: 'block', fontSize: 9.5, color: 'var(--color-muted)' }}>{branch}</span>
         </span>
-        <span style={{ fontSize: 9, color: 'var(--color-dim)' }}>▾</span>
+        <span className="tb-label" style={{ fontSize: 9, color: 'var(--color-dim)' }}>▾</span>
       </button>
       {open && (
         <div className="glass" style={{ position: 'absolute', top: 'calc(100% + 10px)', right: 0, minWidth: 240, borderRadius: 14, padding: 6, boxShadow: 'var(--shadow-pop)', zIndex: 40 }}>
@@ -118,9 +119,9 @@ function UserChip({ name, role, onLogout }: { name?: string; role?: string; onLo
   useOutside(ref, () => setOpen(false))
   return (
     <div ref={ref} style={{ position: 'relative' }}>
-      <button onClick={() => setOpen(o => !o)} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px', borderRadius: 999, background: 'transparent', border: 'none', cursor: 'pointer' }}>
+      <button onClick={() => setOpen(o => !o)} title={name} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '2px 4px', borderRadius: 999, background: 'transparent', border: 'none', cursor: 'pointer' }}>
         <span style={{ width: 30, height: 30, borderRadius: '50%', flexShrink: 0, display: 'grid', placeItems: 'center', background: 'linear-gradient(135deg,var(--color-accent-light),var(--color-accent-strong))', color: '#1A1207', fontWeight: 700, fontSize: 12, boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.35)' }}>{name?.charAt(0).toUpperCase()}</span>
-        <span style={{ textAlign: 'left', paddingRight: 2 }}>
+        <span className="tb-label" style={{ textAlign: 'left', paddingRight: 2 }}>
           <span style={{ display: 'block', fontSize: 12, fontWeight: 700, color: 'var(--color-text)', maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{name}</span>
           <span style={{ display: 'block', fontSize: 9.5, color: 'var(--color-muted)', textTransform: 'capitalize' }}>{role}</span>
         </span>

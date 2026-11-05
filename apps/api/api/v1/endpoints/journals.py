@@ -7,7 +7,7 @@ from datetime import date
 from core.database import get_db
 from core.deps import get_current_user, require_accountant_up
 from models.user import User
-from models.accounting import JournalStatus
+from models.accounting import JournalStatus, JournalType
 from schemas.accounting import (
     JournalCreate, JournalResponse,
     AISuggestRequest, AISuggestResponse,
@@ -26,12 +26,13 @@ def list_journals(
     date_from:  Optional[date] = None,
     date_to:    Optional[date] = None,
     status:     Optional[JournalStatus] = None,
+    journal_type: Optional[JournalType] = None,
     skip:       int = 0,
     limit:      int = 50,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    journals = get_journals(db, date_from, date_to, status, skip, limit)
+    journals = get_journals(db, date_from, date_to, status, skip, limit, journal_type)
     # attach totals
     from decimal import Decimal
     result = []

@@ -3,7 +3,57 @@ from typing import Optional, List
 from uuid import UUID
 from datetime import date
 from decimal import Decimal
-from models.tax import VATReturnStatus, WHTType, WHTCertStatus
+from models.tax import VATReturnStatus, WHTType, WHTCertStatus, TaxKind
+
+
+# ── Tax Code (ประเภทภาษี) ───────────────────────────────────────
+class TaxCodeCreate(BaseModel):
+    code:        str
+    name:        str
+    kind:        TaxKind
+    rate:        Decimal
+    description: Optional[str] = None
+
+    @field_validator("code")
+    @classmethod
+    def code_format(cls, v: str) -> str:
+        v = v.strip().upper()
+        if not v:
+            raise ValueError("ระบุรหัสภาษี")
+        return v
+
+    @field_validator("rate")
+    @classmethod
+    def rate_range(cls, v: Decimal) -> Decimal:
+        if not Decimal("0") <= v <= Decimal("100"):
+            raise ValueError("อัตราภาษีต้องอยู่ระหว่าง 0-100%")
+        return v
+
+
+class TaxCodeUpdate(BaseModel):
+    name:        Optional[str] = None
+    rate:        Optional[Decimal] = None
+    description: Optional[str] = None
+    is_active:   Optional[bool] = None
+
+    @field_validator("rate")
+    @classmethod
+    def rate_range(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and not Decimal("0") <= v <= Decimal("100"):
+            raise ValueError("อัตราภาษีต้องอยู่ระหว่าง 0-100%")
+        return v
+
+
+class TaxCodeResponse(BaseModel):
+    id:          UUID
+    code:        str
+    name:        str
+    kind:        TaxKind
+    rate:        Decimal
+    description: Optional[str]
+    is_active:   bool
+
+    model_config = {"from_attributes": True}
 
 
 # ── VAT Return ─────────────────────────────────────────────────

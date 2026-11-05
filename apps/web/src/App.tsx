@@ -9,6 +9,8 @@ import AIChatPage from '@/pages/dashboard/AIChatPage'
 import UsersPage from '@/pages/users/UsersPage'
 import ChartOfAccountsPage from '@/pages/gl/ChartOfAccountsPage'
 import JournalPage from '@/pages/gl/JournalPage'
+import TaxTypesPage from '@/pages/gl/TaxTypesPage'
+import DocumentBooksPage from '@/pages/books/DocumentBooksPage'
 import CustomersPage from '@/pages/ar/CustomersPage'
 import InvoicePage from '@/pages/ar/InvoicePage'
 import SalesDocPage from '@/pages/ar/SalesDocPage'
@@ -80,6 +82,7 @@ export default function App() {
           {/* GL */}
           <Route path="/gl"               element={<RoleGuard roles={ACC}><ChartOfAccountsPage /></RoleGuard>} />
           <Route path="/gl/journal"       element={<RoleGuard roles={ACC}><JournalPage /></RoleGuard>} />
+          <Route path="/gl/tax-types"     element={<RoleGuard roles={ACC}><TaxTypesPage /></RoleGuard>} />
           {/* AR */}
           <Route path="/ar"               element={<RoleGuard roles={AR_ROLES}><InvoicePage /></RoleGuard>} />
           <Route path="/ar/quotations"    element={<RoleGuard roles={AR_ROLES}><SalesDocPage docType="quotation" /></RoleGuard>} />
@@ -89,9 +92,11 @@ export default function App() {
           <Route path="/ar/receipts"      element={<RoleGuard roles={AR_ROLES}><ReceiptsPage /></RoleGuard>} />
           <Route path="/ar/reports"       element={<RoleGuard roles={AR_ROLES}><SalesReportPage /></RoleGuard>} />
           <Route path="/ar/customers"     element={<RoleGuard roles={AR_ROLES}><CustomersPage /></RoleGuard>} />
+          <Route path="/ar/books"         element={<RoleGuard roles={ACC}><DocumentBooksPage key="income" side="income" /></RoleGuard>} />
           {/* AP */}
           <Route path="/ap"               element={<RoleGuard roles={AR_ROLES}><BillPage /></RoleGuard>} />
           <Route path="/ap/suppliers"     element={<RoleGuard roles={AR_ROLES}><SuppliersPage /></RoleGuard>} />
+          <Route path="/ap/books"         element={<RoleGuard roles={ACC}><DocumentBooksPage key="expense" side="expense" /></RoleGuard>} />
           {/* Inventory — W13-14 */}
           <Route path="/inventory"           element={<RoleGuard roles={INV_ROLES}><ProductsPage /></RoleGuard>} />
           <Route path="/inventory/movements" element={<RoleGuard roles={INV_ROLES}><StockMovementsPage /></RoleGuard>} />

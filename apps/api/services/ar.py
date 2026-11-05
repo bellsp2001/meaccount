@@ -10,8 +10,9 @@ from sqlalchemy import func, and_, or_
 from fastapi import HTTPException
 
 from models.ar import Customer, Invoice, InvoiceItem, Payment, InvoiceStatus, PaymentMethod
-from models.accounting import Account, Journal, JournalEntry, JournalStatus, NormalBalance
+from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
+from services.document_books import resolve_book
 from schemas.ar import CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate
 
 
@@ -63,6 +64,7 @@ def create_invoice(db: Session, payload: InvoiceCreate, user_id: Optional[UUID] 
         raise HTTPException(404, "ไม่พบลูกค้า")
 
     due = payload.due_date or (payload.date + timedelta(days=customer.credit_days))
+    resolve_book(db, payload.book_id, BookSide.INCOME)
     number = next_invoice_number(db, payload.date)
 
     # Calc totals
@@ -76,7 +78,7 @@ def create_invoice(db: Session, payload: InvoiceCreate, user_id: Optional[UUID] 
         vat_rate=payload.vat_rate, subtotal=subtotal,
         vat_amount=vat_amount, total=total,
         paid_amount=Decimal("0"), balance_due=total,
-        note=payload.note, created_by=user_id,
+        note=payload.note, created_by=user_id, book_id=payload.book_id,
     )
     db.add(inv); db.flush()
 
@@ -100,9 +102,13 @@ def post_invoice_to_gl(db: Session, invoice_id: UUID, user_id: Optional[UUID] = 
     if inv.gl_posted:
         raise HTTPException(400, "Invoice นี้ Post ไป GL แล้ว")
 
-    ar_acc   = _find_account(db, ["1201","1200","12"])
-    rev_acc  = _find_account(db, ["4101","4100","41"])
+    # A สมุดบันทึก on the invoice overrides the default mapping: its income account, its counter
+    # account (ลูกหนี้ or เงินสด) and its journal. Anything it leaves blank falls back as before.
+    book = inv.book
+    ar_acc   = (book and book.counter_account) or _find_account(db, ["1201","1200","12"])
+    rev_acc  = (book and book.account) or _find_account(db, ["4101","4100","41"])
     vat_acc  = _find_account(db, ["2103","21"])
+    journal_type = book.journal_type if book else JournalType.SALES
 
     if not ar_acc or not rev_acc:
         raise HTTPException(400, "ไม่พบบัญชีลูกหนี้หรือรายได้ในผังบัญชี — กรุณาเพิ่มบัญชีก่อน")
@@ -119,6 +125,7 @@ def post_invoice_to_gl(db: Session, invoice_id: UUID, user_id: Optional[UUID] = 
         date=inv.date,
         description=f"Invoice {inv.number} — {inv.customer.name}",
         reference=inv.number,
+        journal_type=journal_type,
         status=JournalStatus.POSTED,
         created_by=user_id,
     )
@@ -174,6 +181,7 @@ def receive_payment(db: Session, payload: PaymentCreate, user_id: Optional[UUID]
             date=payload.date,
             description=f"รับชำระ {inv.number} — {inv.customer.name}",
             reference=payment.reference or inv.number,
+            journal_type=JournalType.RECEIPT,
             status=JournalStatus.POSTED,
             created_by=user_id,
         )

@@ -115,7 +115,7 @@ export default function ReportBuilderPage() {
               </div>
               <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, overflow: 'auto', maxHeight: 480 }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead><tr>{result.columns.map(c => <th key={c} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--color-border)', position: 'sticky', top: 0, background: 'var(--color-card)' }}>{labelMap[c] || c}</th>)}</tr></thead>
+                  <thead><tr>{result.columns.map(c => <th key={c} style={{ padding: '9px 12px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--color-border)', position: 'sticky', top: 0, background: 'var(--color-popover)' }}>{labelMap[c] || c}</th>)}</tr></thead>
                   <tbody>
                     {result.rows.map((row, i) => (
                       <tr key={i}>

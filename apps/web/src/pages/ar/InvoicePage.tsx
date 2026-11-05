@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
 import { openDocPdf } from '@/lib/pdf'
+import { DocumentBookSelect, useDocumentBooks } from '@/components/books/DocumentBookSelect'
 
 interface Customer { id: string; code: string; name: string; credit_days: number }
 interface InvoiceItem { id: string; description: string; quantity: number; unit?: string; unit_price: number; discount_pct: number; amount: number }
@@ -13,6 +14,7 @@ interface Invoice {
   date: string; due_date: string; status: string
   subtotal: number; vat_rate: number; vat_amount: number; total: number
   paid_amount: number; balance_due: number; note?: string; gl_posted: boolean
+  book?: { code: string; name: string } | null
   items: InvoiceItem[]
 }
 
@@ -38,6 +40,7 @@ const invoiceSchema = z.object({
   due_date:    z.string().optional(),
   vat_rate:    z.number().min(0).max(100),
   note:        z.string().optional(),
+  book_id:     z.string().optional(),
   items:       z.array(itemSchema).min(1, 'ต้องมีอย่างน้อย 1 รายการ'),
 })
 type IForm = z.infer<typeof invoiceSchema>
@@ -71,7 +74,7 @@ export default function InvoicePage() {
   })
 
   const createM = useMutation({
-    mutationFn: (d: IForm) => api.post('/api/v1/ar/invoices', { ...d, due_date: d.due_date || undefined }),
+    mutationFn: (d: IForm) => api.post('/api/v1/ar/invoices', { ...d, due_date: d.due_date || undefined, book_id: d.book_id || undefined }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); setShowCreate(false); resetInv() },
   })
   const postM = useMutation({
@@ -88,13 +91,24 @@ export default function InvoicePage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); setShowPay(null) },
   })
 
-  const { register: regInv, handleSubmit: subInv, control, reset: resetInv, watch: watchInv, formState: { errors: errInv } } = useForm<IForm>({
+  const { register: regInv, handleSubmit: subInv, control, reset: resetInv, watch: watchInv, setValue: setInv, formState: { errors: errInv } } = useForm<IForm>({
     resolver: zodResolver(invoiceSchema),
-    defaultValues: { date: new Date().toISOString().split('T')[0], vat_rate: 7, items: [{ description:'', quantity:1, unit_price:0, discount_pct:0 }] },
+    defaultValues: { date: new Date().toISOString().split('T')[0], vat_rate: 7, book_id: '', items: [{ description:'', quantity:1, unit_price:0, discount_pct:0 }] },
   })
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchItems = watchInv('items')
-  const watchVAT = watchInv('vat_rate') || 7
+  // Not `|| 7`: a 0% invoice (exempt / export) must preview as 0, not fall back to 7.
+  const vatInput = watchInv('vat_rate')
+  const watchVAT = Number.isFinite(vatInput) ? vatInput : 0
+
+  // Picking a book with a VAT tax type fills its rate; the field stays editable.
+  const { data: incomeBooks = [] } = useDocumentBooks('income')
+  const bookField = regInv('book_id', {
+    onChange: e => {
+      const tax = incomeBooks.find(b => b.id === e.target.value)?.tax_code
+      if (tax?.kind === 'vat') setInv('vat_rate', Number(tax.rate))
+    },
+  })
   const subtotal = watchItems.reduce((s, it) => {
     const amt = (Number(it.quantity)||0) * (Number(it.unit_price)||0) * (1 - (Number(it.discount_pct)||0)/100)
     return s + amt
@@ -268,6 +282,8 @@ export default function InvoicePage() {
               <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
             </div>
             <form onSubmit={subInv(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:18 }}>
+              <DocumentBookSelect side="income" field={bookField} value={watchInv('book_id')} inputStyle={inp}
+                labelStyle={{ display:'block', fontSize:10, fontWeight:700, color:'var(--color-text-tertiary)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:6 }} />
               {/* Header */}
               <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr', gap:12 }}>
                 <div>
@@ -356,7 +372,7 @@ export default function InvoicePage() {
                 <textarea {...regInv('note')} rows={2} style={{ ...inp, resize:'vertical' }} placeholder="ข้อความเพิ่มเติม (ไม่บังคับ)" />
               </div>
 
-              {createM.isError && <div style={{ background:'#FF6B6B12', border:'1px solid #FF6B6B35', borderRadius:8, padding:'10px 14px' }}><p style={{ margin:0, fontSize:12, color:'#FF6B6B' }}>เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล</p></div>}
+              {createM.isError && <div style={{ background:'#FF6B6B12', border:'1px solid #FF6B6B35', borderRadius:8, padding:'10px 14px' }}><p style={{ margin:0, fontSize:12, color:'#FF6B6B' }}>{typeof (createM.error as any)?.response?.data?.detail === 'string' ? (createM.error as any).response.data.detail : 'เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล'}</p></div>}
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
                 <button type="button" onClick={()=>setShowCreate(false)} style={{ padding:'9px 20px', borderRadius:9, border:'1px solid var(--color-border-strong)', background:'transparent', color:'var(--color-text-tertiary)', cursor:'pointer', fontWeight:600, fontSize:13 }}>ยกเลิก</button>
                 <button type="submit" disabled={createM.isPending} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 24px', cursor:'pointer', opacity:createM.isPending?0.7:1 }}>

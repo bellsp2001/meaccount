@@ -1,7 +1,8 @@
 import type { UserRole } from '@/types'
 import { AppIcon } from './icons'
 
-export interface SubItem { to: string; label: string }
+/** `roles` narrows a sub-item below its parent's roles; omitted means the parent's roles. */
+export interface SubItem { to: string; label: string; roles?: UserRole[] }
 export interface NavItem { to: string; icon: string; label: string; roles: UserRole[]; badge?: string; children?: SubItem[] }
 
 export const NAV: NavItem[] = [
@@ -17,6 +18,7 @@ export const NAV: NavItem[] = [
       { to: '/ar/deposits',     label: 'ใบมัดจำ' },
       { to: '/ar/reports',      label: 'รายงานการขาย' },
       { to: '/ar/customers',    label: 'รายชื่อลูกค้า' },
+      { to: '/ar/books',        label: 'สมุดบันทึก', roles: ['admin','accountant'] },
     ],
   },
   {
@@ -24,13 +26,15 @@ export const NAV: NavItem[] = [
     children: [
       { to: '/ap',            label: 'บิล / ค่าใช้จ่าย' },
       { to: '/ap/suppliers',  label: 'รายชื่อผู้จำหน่าย' },
+      { to: '/ap/books',      label: 'สมุดบันทึก', roles: ['admin','accountant'] },
     ],
   },
   {
-    to: '/gl', icon: 'ledger', label: 'บัญชีแยกประเภท', roles: ['admin','accountant'],
+    to: '/gl', icon: 'ledger', label: 'การบัญชี', roles: ['admin','accountant'],
     children: [
       { to: '/gl',         label: 'ผังบัญชี' },
       { to: '/gl/journal', label: 'สมุดรายวัน' },
+      { to: '/gl/tax-types', label: 'ประเภทภาษี' },
     ],
   },
   { to: '/pos', icon: 'pos', label: 'POS หน้าร้าน', roles: ['admin','cashier','accountant'], badge: 'New' },
@@ -83,7 +87,11 @@ export const ICON_TINTS: [string, string][] = [
 export const navTint = (i: number): [string, string] => ICON_TINTS[i % ICON_TINTS.length]
 
 export function allowedNav(role?: string): NavItem[] {
-  return NAV.filter(n => role && n.roles.includes(role as UserRole))
+  return NAV
+    .filter(n => role && n.roles.includes(role as UserRole))
+    .map(n => n.children?.some(c => c.roles)
+      ? { ...n, children: n.children.filter(c => !c.roles || c.roles.includes(role as UserRole)) }
+      : n)
 }
 
 /** Resolve the top-level app that owns the current path. */

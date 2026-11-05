@@ -27,6 +27,24 @@ class WHTCertStatus(str, enum.Enum):
     FILED   = "filed"
 
 
+class TaxKind(str, enum.Enum):
+    VAT = "vat"   # ภาษีมูลค่าเพิ่ม
+    WHT = "wht"   # ภาษีหัก ณ ที่จ่าย
+
+
+# ── Tax Code (ประเภทภาษี) ───────────────────────────────────────
+class TaxCode(Base, UUIDMixin, TimestampMixin):
+    """A reusable tax rate the user picks on documents (e.g. VAT 7%, WHT ค่าบริการ 3%)."""
+    __tablename__ = "tax_codes"
+
+    code        = Column(String(20),  nullable=False, unique=True, index=True)   # "VAT7", "WHT3"
+    name        = Column(String(200), nullable=False)
+    kind        = Column(Enum(TaxKind), nullable=False)
+    rate        = Column(Numeric(5, 2), nullable=False)
+    description = Column(Text, nullable=True)
+    is_active   = Column(Boolean, default=True, nullable=False)
+
+
 # ── VAT Return (ภ.พ.30) ─────────────────────────────────────────
 class VATReturn(Base, UUIDMixin, TimestampMixin):
     __tablename__ = "vat_returns"

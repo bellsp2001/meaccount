@@ -33,6 +33,11 @@ class Settings(BaseSettings):
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
 
+    # Dev convenience: create missing tables on startup. Production sets this to false and runs
+    # `alembic upgrade head` instead (see apps/api/docker-entrypoint.sh) — create_all would
+    # otherwise create new tables before their migration runs, and that migration would then fail.
+    AUTO_CREATE_SCHEMA: bool = True
+
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379
     REDIS_PASSWORD: str = "changeme_redis"

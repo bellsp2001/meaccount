@@ -261,7 +261,7 @@ export function BottomDock() {
   // ── Tile renderer ──────────────────────────────────────────────────────
   const AppTile = (item: NavItem, draggable: boolean) => {
     const isActive = active?.to === item.to
-    const tint = navTint(NAV.indexOf(item))
+    const tint = navTint(NAV.findIndex(n => n.to === item.to))
     const isPlaceholder = dragKey === item.to
     return (
       <button
@@ -364,7 +364,7 @@ export function BottomDock() {
           pointerEvents: 'none', zIndex: 9999, transformOrigin: 'center top', willChange: 'transform',
           filter: 'drop-shadow(0 12px 22px rgba(0,0,0,0.45))',
         }}>
-          <IconTile icon={ghostItem.icon} tint={navTint(NAV.indexOf(ghostItem))} active size={44} />
+          <IconTile icon={ghostItem.icon} tint={navTint(NAV.findIndex(n => n.to === ghostItem.to))} active size={44} />
           <span style={{ fontSize: 9, fontWeight: 700, lineHeight: 1.1, textAlign: 'center', maxWidth: 60, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: 'var(--color-accent)' }}>{ghostItem.label}</span>
         </div>,
         document.body,

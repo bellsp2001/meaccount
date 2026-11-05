@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func, and_
 from fastapi import HTTPException
 
-from models.accounting import Account, Journal, JournalEntry, JournalStatus, AccountTypeEnum, NormalBalance
+from models.accounting import Account, Journal, JournalEntry, JournalStatus, JournalType, AccountTypeEnum, NormalBalance
 from schemas.accounting import AccountCreate, AccountUpdate, JournalCreate
 
 
@@ -102,6 +102,7 @@ def create_journal(db: Session, payload: JournalCreate, user_id: Optional[UUID] 
         number=number,
         date=payload.date,
         description=payload.description,
+        journal_type=payload.journal_type,
         reference=payload.reference,
         note=payload.note,
         status=JournalStatus.DRAFT,
@@ -160,8 +161,11 @@ def get_journals(
     status: Optional[JournalStatus] = None,
     skip: int = 0,
     limit: int = 50,
+    journal_type: Optional[JournalType] = None,
 ) -> List[Journal]:
     q = db.query(Journal).filter(Journal.is_deleted == False)
+    if journal_type:
+        q = q.filter(Journal.journal_type == journal_type)
     if date_from:
         q = q.filter(Journal.date >= date_from)
     if date_to:

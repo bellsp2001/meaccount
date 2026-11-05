@@ -10,7 +10,7 @@ from sqlalchemy import or_, and_
 from fastapi import HTTPException
 
 from models.payroll import Employee, Payslip, EmployeeStatus, PayslipStatus
-from models.accounting import Account, Journal, JournalEntry, JournalStatus, NormalBalance
+from models.accounting import Account, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.tax_calc import calc_payslip
 from schemas.payroll import EmployeeCreate, EmployeeUpdate, PayslipCreate, PayrollRunRequest
@@ -206,6 +206,7 @@ def post_payslip_to_gl(db: Session, payslip_id: UUID, user_id: Optional[UUID] = 
     j = Journal(
         number=next_journal_number(db, ps.pay_date), date=ps.pay_date,
         description=f"จ่ายเงินเดือน {ps.number}", reference=ps.number,
+        journal_type=JournalType.PAYMENT,
         status=JournalStatus.POSTED, created_by=user_id,
     )
     db.add(j); db.flush()

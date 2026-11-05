@@ -151,7 +151,7 @@ export default function POSTerminalPage() {
                   <tr key={line.product.id}>
                     <td style={{ padding: '12px 16px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                       <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{line.product.name}</p>
-                      <p style={{ margin: 0, fontSize: 10, color: 'var(--color-muted)' }}>{fmtB(line.product.sale_price)} × {line.unit}</p>
+                      <p style={{ margin: 0, fontSize: 10, color: 'var(--color-muted)' }}>{fmtB(line.product.sale_price)} × {line.product.unit}</p>
                     </td>
                     <td style={{ padding: '12px 8px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>

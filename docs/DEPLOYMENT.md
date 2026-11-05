@@ -1,5 +1,9 @@
 # MeAccount — Deployment Guide
 
+> Step-by-step hosting on a free Oracle Cloud VM with Coolify (production + staging, auto-deploy,
+> nightly backups): see [DEPLOY_ORACLE_COOLIFY.md](DEPLOY_ORACLE_COOLIFY.md). This page covers the
+> environment variables and checks that apply to any host.
+
 ## Before you deploy: run the readiness scan
 
 Once the API is running with a real database and admin login, hit:

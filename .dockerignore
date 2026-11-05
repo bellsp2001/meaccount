@@ -1,0 +1,13 @@
+# Context for apps/web/Dockerfile is the repo root — send only what the web build needs.
+.git/
+**/node_modules/
+**/dist/
+apps/api/
+apps/mobile/*
+!apps/mobile/package.json
+New Code/
+PNG/
+docs/
+*.db
+.env
+.env.*

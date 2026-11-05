@@ -20,7 +20,7 @@ export function Modal({ open, onClose, title, children, width = 480 }: ModalProp
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div
-        className="relative bg-[var(--color-card)] border border-[var(--color-border-strong)] rounded-2xl shadow-2xl"
+        className="relative bg-[var(--color-popover)] border border-[var(--color-border-strong)] rounded-2xl shadow-2xl"
         style={{ width: '100%', maxWidth: width }}
         onClick={e => e.stopPropagation()}
       >
