@@ -7,6 +7,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.database import SessionLocal, engine, Base
 from models.accounting import Account, AccountTypeEnum, NormalBalance
+import models.registry  # noqa: F401 — loads every model so FKs resolve
 
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()

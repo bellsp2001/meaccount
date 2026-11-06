@@ -4,6 +4,7 @@ from uuid import UUID
 from datetime import date
 from decimal import Decimal
 from models.ar import InvoiceStatus, PaymentMethod
+from schemas.accounting import DocumentBookRef
 
 
 # ── Customer ───────────────────────────────────────────────────
@@ -91,6 +92,7 @@ class InvoiceCreate(BaseModel):
     due_date:    Optional[date] = None    # auto-calc from credit_days if None
     vat_rate:    Decimal = Decimal("7")
     note:        Optional[str] = None
+    book_id:     Optional[UUID] = None    # สมุดบันทึก (income side)
     items:       List[InvoiceItemCreate]
 
     @field_validator("items")
@@ -117,6 +119,8 @@ class InvoiceResponse(BaseModel):
     balance_due: Decimal
     note:        Optional[str]
     gl_posted:   bool
+    book_id:     Optional[UUID] = None
+    book:        Optional[DocumentBookRef] = None
     items:       List[InvoiceItemResponse] = []
     model_config = {"from_attributes": True}
 

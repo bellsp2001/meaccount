@@ -5,7 +5,7 @@ from datetime import date
 from decimal import Decimal
 from core.database import SessionLocal, engine, Base
 from models.payroll import Employee, MaritalStatus
-import models.user, models.accounting, models.ar, models.ap, models.inventory, models.payroll
+import models.registry  # noqa: F401 — loads every model so FKs resolve
 
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()

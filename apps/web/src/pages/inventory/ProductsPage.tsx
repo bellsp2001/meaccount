@@ -24,8 +24,8 @@ const schema = z.object({
 })
 type PForm = z.infer<typeof schema>
 
-const inp: React.CSSProperties = { width: '100%', background: '#070A0F', border: '1px solid #151C28', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: '#DDE3EE', outline: 'none', boxSizing: 'border-box' }
-const lbl: React.CSSProperties = { display: 'block', fontSize: 10, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }
+const inp: React.CSSProperties = { width: '100%', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: 'var(--color-text)', outline: 'none', boxSizing: 'border-box' }
+const lbl: React.CSSProperties = { display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }
 
 export default function ProductsPage() {
   const qc = useQueryClient()
@@ -59,16 +59,16 @@ export default function ProductsPage() {
   const lowStockCount = products.filter(p => p.is_low_stock).length
 
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties  = { background: '#0D1018', border: '1px solid #1E2A3A', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }
+  const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>สินค้าคงคลัง</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#4A5A70' }}>ทั้งหมด {products.length} SKU</p>
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>ทั้งหมด {products.length} SKU</p>
         </div>
-        <button onClick={() => setShowCreate(true)} style={{ background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', color: '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
+        <button onClick={() => setShowCreate(true)} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
           + เพิ่มสินค้า
         </button>
       </div>
@@ -78,10 +78,10 @@ export default function ProductsPage() {
         {[
           { l: 'มูลค่าสต็อกรวม', v: `฿${totalValue.toLocaleString('th-TH', { minimumFractionDigits: 2 })}`, color: '#43E97B' },
           { l: 'สินค้าใกล้หมด', v: lowStockCount, color: '#FF6B6B' },
-          { l: 'SKU ทั้งหมด', v: products.length, color: '#4FACFE' },
+          { l: 'SKU ทั้งหมด', v: products.length, color: 'var(--color-accent-light)' },
         ].map(s => (
-          <div key={s.l} style={{ background: '#0D1018', border: `1px solid ${s.color}20`, borderTop: `2px solid ${s.color}`, borderRadius: 12, padding: '14px 16px' }}>
-            <p style={{ margin: '0 0 4px', fontSize: 10, color: '#4A5A70' }}>{s.l}</p>
+          <div key={s.l} style={{ background: 'var(--color-card)', border: `1px solid ${s.color}20`, borderTop: `2px solid ${s.color}`, borderRadius: 12, padding: '14px 16px' }}>
+            <p style={{ margin: '0 0 4px', fontSize: 10, color: 'var(--color-muted)' }}>{s.l}</p>
             <p style={{ margin: 0, fontSize: 20, fontWeight: 800, color: s.color }}>{s.v}</p>
           </div>
         ))}
@@ -90,46 +90,46 @@ export default function ProductsPage() {
       {/* Search + filter */}
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  ค้นหาชื่อสินค้าหรือ SKU..."
-          style={{ flex: 1, minWidth: 200, background: '#0D1018', border: '1px solid #151C28', borderRadius: 9, padding: '9px 14px', fontSize: 13, color: '#DDE3EE', outline: 'none' }} />
+          style={{ flex: 1, minWidth: 200, background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 9, padding: '9px 14px', fontSize: 13, color: 'var(--color-text)', outline: 'none' }} />
         <button onClick={() => setLowStockOnly(v => !v)}
-          style={{ background: lowStockOnly ? '#FF6B6B15' : '#0D1018', border: `1px solid ${lowStockOnly ? '#FF6B6B50' : '#151C28'}`, color: lowStockOnly ? '#FF6B6B' : '#6A7A90', borderRadius: 9, padding: '9px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
+          style={{ background: lowStockOnly ? '#FF6B6B15' : 'var(--color-card)', border: `1px solid ${lowStockOnly ? '#FF6B6B50' : 'var(--color-border)'}`, color: lowStockOnly ? '#FF6B6B' : 'var(--color-text-tertiary)', borderRadius: 9, padding: '9px 16px', fontSize: 12, fontWeight: 700, cursor: 'pointer' }}>
           ⚠ ใกล้หมดเท่านั้น
         </button>
       </div>
 
       {/* Table */}
-      <div style={{ background: '#0D1018', border: '1px solid #151C28', borderRadius: 14, overflow: 'hidden' }}>
-        {isLoading ? <div style={{ padding: 48, textAlign: 'center', color: '#3A4A60' }}>กำลังโหลด...</div>
-        : products.length === 0 ? <div style={{ padding: 52, textAlign: 'center', color: '#3A4A60', fontSize: 13 }}>ยังไม่มีสินค้า</div>
+      <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, overflow: 'hidden' }}>
+        {isLoading ? <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-dim)' }}>กำลังโหลด...</div>
+        : products.length === 0 ? <div style={{ padding: 52, textAlign: 'center', color: 'var(--color-dim)', fontSize: 13 }}>ยังไม่มีสินค้า</div>
         : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['SKU', 'ชื่อสินค้า', 'คงเหลือ', 'ต้นทุนเฉลี่ย', 'มูลค่า', 'Cost Method', ''].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: '#3A4A60', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid #151C28' }}>{h}</th>
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {products.map(p => (
                 <tr key={p.id}>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontFamily: 'monospace', fontSize: 12, color: '#4FACFE' }}>{p.sku}</td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520' }}>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontFamily: 'monospace', fontSize: 12, color: 'var(--color-accent-light)' }}>{p.sku}</td>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{p.name}</p>
                     {p.is_low_stock && <span style={{ fontSize: 9, color: '#FF6B6B', fontWeight: 700 }}>⚠ ใกล้หมด</span>}
                   </td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontSize: 13, fontFamily: 'monospace', fontWeight: 600, color: p.is_low_stock ? '#FF6B6B' : '#43E97B' }}>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 13, fontFamily: 'monospace', fontWeight: 600, color: p.is_low_stock ? '#FF6B6B' : '#43E97B' }}>
                     {Number(p.qty_on_hand).toLocaleString('th-TH')} {p.unit}
                   </td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontSize: 12, fontFamily: 'monospace', color: '#8A9BB0' }}>฿{Number(p.avg_cost).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: '#43E97B' }}>฿{Number(p.stock_value).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520' }}>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, fontFamily: 'monospace', color: 'var(--color-text-secondary)' }}>฿{Number(p.avg_cost).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: '#43E97B' }}>฿{Number(p.stock_value).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                     <span style={{ fontSize: 10, fontWeight: 700, color: p.cost_method === 'fifo' ? '#F5A623' : '#667EEA', background: p.cost_method === 'fifo' ? '#F5A62318' : '#667EEA18', border: `1px solid ${p.cost_method === 'fifo' ? '#F5A62335' : '#667EEA35'}`, padding: '2px 8px', borderRadius: 10 }}>
                       {p.cost_method.toUpperCase()}
                     </span>
                   </td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520' }}>
-                    <button onClick={() => setShowForecast(p)} style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: '1px solid #00D4AA40', background: '#00D4AA12', color: '#00D4AA', cursor: 'pointer', fontWeight: 700 }}>🤖 พยากรณ์</button>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                    <button onClick={() => setShowForecast(p)} style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: '1px solid #F2714E40', background: '#F2714E12', color: '#F2714E', cursor: 'pointer', fontWeight: 700 }}>🤖 พยากรณ์</button>
                   </td>
                 </tr>
               ))}
@@ -142,9 +142,9 @@ export default function ProductsPage() {
       {showCreate && (
         <div style={overlay} onClick={() => setShowCreate(false)}>
           <div style={modal} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #151C28' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>เพิ่มสินค้าใหม่</h3>
-              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>
+              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
@@ -169,8 +169,8 @@ export default function ProductsPage() {
               </div>
               {createM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>เกิดข้อผิดพลาด — SKU อาจซ้ำ</p></div>}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid #1E2A3A', background: 'transparent', color: '#6A7A90', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
-                <button type="submit" disabled={createM.isPending} style={{ background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', color: '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '9px 20px', cursor: 'pointer', opacity: createM.isPending ? 0.7 : 1 }}>
+                <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
+                <button type="submit" disabled={createM.isPending} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '9px 20px', cursor: 'pointer', opacity: createM.isPending ? 0.7 : 1 }}>
                   {createM.isPending ? 'กำลังบันทึก...' : 'บันทึก'}
                 </button>
               </div>
@@ -183,26 +183,26 @@ export default function ProductsPage() {
       {showForecast && (
         <div style={overlay} onClick={() => setShowForecast(null)}>
           <div style={{ ...modal, maxWidth: 460 }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #151C28', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
                 <span style={{ fontSize: 20 }}>🤖</span>
-                <div><h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>AI พยากรณ์ความต้องการ</h3><p style={{ margin: 0, fontSize: 11, color: '#4A5A70' }}>{showForecast.name}</p></div>
+                <div><h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>AI พยากรณ์ความต้องการ</h3><p style={{ margin: 0, fontSize: 11, color: 'var(--color-muted)' }}>{showForecast.name}</p></div>
               </div>
-              <button onClick={() => setShowForecast(null)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>
+              <button onClick={() => setShowForecast(null)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <div style={{ padding: 24 }}>
               {!forecast ? (
-                <div style={{ textAlign: 'center', padding: 40, color: '#3A4A60' }}>กำลังวิเคราะห์...</div>
+                <div style={{ textAlign: 'center', padding: 40, color: 'var(--color-dim)' }}>กำลังวิเคราะห์...</div>
               ) : (
                 <>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
-                    <div style={{ background: '#070A0F', borderRadius: 10, padding: '14px' }}>
-                      <p style={{ margin: '0 0 4px', fontSize: 10, color: '#4A5A70' }}>สต็อกปัจจุบัน</p>
+                    <div style={{ background: 'var(--color-bg-inset)', borderRadius: 10, padding: '14px' }}>
+                      <p style={{ margin: '0 0 4px', fontSize: 10, color: 'var(--color-muted)' }}>สต็อกปัจจุบัน</p>
                       <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#43E97B' }}>{Number(forecast.current_stock).toLocaleString('th-TH')}</p>
                     </div>
-                    <div style={{ background: '#070A0F', borderRadius: 10, padding: '14px' }}>
-                      <p style={{ margin: '0 0 4px', fontSize: 10, color: '#4A5A70' }}>เบิกเฉลี่ย/วัน</p>
-                      <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: '#4FACFE' }}>{forecast.avg_daily_usage}</p>
+                    <div style={{ background: 'var(--color-bg-inset)', borderRadius: 10, padding: '14px' }}>
+                      <p style={{ margin: '0 0 4px', fontSize: 10, color: 'var(--color-muted)' }}>เบิกเฉลี่ย/วัน</p>
+                      <p style={{ margin: 0, fontSize: 18, fontWeight: 800, color: 'var(--color-accent-light)' }}>{forecast.avg_daily_usage}</p>
                     </div>
                   </div>
 
@@ -215,11 +215,11 @@ export default function ProductsPage() {
                   )}
 
                   <div style={{ marginBottom: 16 }}>
-                    <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase' }}>คาดการณ์ความต้องการ</p>
+                    <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase' }}>คาดการณ์ความต้องการ</p>
                     {[['30 วัน', forecast.forecast_30d], ['60 วัน', forecast.forecast_60d], ['90 วัน', forecast.forecast_90d]].map(([label, val]) => (
-                      <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #151C28', fontSize: 12 }}>
-                        <span style={{ color: '#6A7A90' }}>{label}</span>
-                        <span style={{ color: '#DDE3EE', fontWeight: 600 }}>{Number(val).toLocaleString('th-TH')} หน่วย</span>
+                      <div key={label as string} style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid var(--color-border)', fontSize: 12 }}>
+                        <span style={{ color: 'var(--color-text-tertiary)' }}>{label}</span>
+                        <span style={{ color: 'var(--color-text)', fontWeight: 600 }}>{Number(val).toLocaleString('th-TH')} หน่วย</span>
                       </div>
                     ))}
                   </div>
@@ -231,9 +231,9 @@ export default function ProductsPage() {
                     </div>
                   )}
 
-                  <div style={{ background: '#00D4AA08', border: '1px solid #00D4AA20', borderRadius: 10, padding: '12px 14px' }}>
-                    <p style={{ margin: '0 0 4px', fontSize: 10, color: '#00D4AA', fontWeight: 700 }}>✦ AI Confidence: {Math.round(forecast.confidence * 100)}%</p>
-                    <p style={{ margin: 0, fontSize: 11, color: '#6A7A90', lineHeight: 1.6 }}>{forecast.explanation}</p>
+                  <div style={{ background: '#F2714E08', border: '1px solid #F2714E20', borderRadius: 10, padding: '12px 14px' }}>
+                    <p style={{ margin: '0 0 4px', fontSize: 10, color: '#F2714E', fontWeight: 700 }}>✦ AI Confidence: {Math.round(forecast.confidence * 100)}%</p>
+                    <p style={{ margin: 0, fontSize: 11, color: 'var(--color-text-tertiary)', lineHeight: 1.6 }}>{forecast.explanation}</p>
                   </div>
                 </>
               )}

@@ -30,8 +30,8 @@ const schema = z.object({
 })
 type SForm = z.infer<typeof schema>
 
-const inp: React.CSSProperties = { width: '100%', background: '#070A0F', border: '1px solid #151C28', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: '#DDE3EE', outline: 'none', boxSizing: 'border-box' }
-const lbl: React.CSSProperties = { display: 'block', fontSize: 10, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }
+const inp: React.CSSProperties = { width: '100%', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: 'var(--color-text)', outline: 'none', boxSizing: 'border-box' }
+const lbl: React.CSSProperties = { display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }
 
 export default function SuppliersPage() {
   const qc = useQueryClient()
@@ -61,16 +61,16 @@ export default function SuppliersPage() {
   )
 
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties   = { background: '#0D1018', border: '1px solid #1E2A3A', borderRadius: 16, width: '100%', maxWidth: 580, maxHeight: '90vh', overflowY: 'auto' }
+  const modal: React.CSSProperties   = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 580, maxHeight: '90vh', overflowY: 'auto' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>รายชื่อผู้จำหน่าย</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#4A5A70' }}>Suppliers — ทั้งหมด {suppliers.length} ราย</p>
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>Suppliers — ทั้งหมด {suppliers.length} ราย</p>
         </div>
-        <button onClick={() => setShowCreate(true)} style={{ background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', color: '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
+        <button onClick={() => setShowCreate(true)} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
           + เพิ่มผู้จำหน่าย
         </button>
       </div>
@@ -80,18 +80,18 @@ export default function SuppliersPage() {
         {[
           { label: 'ผู้จำหน่ายทั้งหมด', value: suppliers.length,                                    color: '#F093FB' },
           { label: 'Active',            value: suppliers.filter(s => s.is_active).length,           color: '#43E97B' },
-          { label: 'มีข้อมูลธนาคาร',   value: suppliers.filter(s => s.bank_account).length,        color: '#4FACFE' },
+          { label: 'มีข้อมูลธนาคาร',   value: suppliers.filter(s => s.bank_account).length,        color: 'var(--color-accent-light)' },
           { label: 'มีการหัก WHT',     value: suppliers.filter(s => s.wht_type).length,            color: '#F5A623' },
         ].map(s => (
-          <div key={s.label} style={{ background: '#0D1018', border: `1px solid ${s.color}20`, borderTop: `2px solid ${s.color}`, borderRadius: 12, padding: '12px 14px' }}>
-            <p style={{ margin: '0 0 3px', fontSize: 10, color: '#4A5A70' }}>{s.label}</p>
+          <div key={s.label} style={{ background: 'var(--color-card)', border: `1px solid ${s.color}20`, borderTop: `2px solid ${s.color}`, borderRadius: 12, padding: '12px 14px' }}>
+            <p style={{ margin: '0 0 3px', fontSize: 10, color: 'var(--color-muted)' }}>{s.label}</p>
             <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: s.color }}>{s.value}</p>
           </div>
         ))}
       </div>
 
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  ค้นหาชื่อ, รหัส, เลขผู้เสียภาษี..."
-        style={{ background: '#0D1018', border: '1px solid #151C28', borderRadius: 9, padding: '9px 14px', fontSize: 13, color: '#DDE3EE', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+        style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 9, padding: '9px 14px', fontSize: 13, color: 'var(--color-text)', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
 
       {/* Selected detail */}
       {selected && (
@@ -99,50 +99,50 @@ export default function SuppliersPage() {
           <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12 }}>
             <div>
               <p style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 800 }}>{selected.name}</p>
-              <p style={{ margin: 0, fontSize: 12, color: '#5A6A80' }}>รหัส: {selected.code}{selected.tax_id ? ` · เลขภาษี: ${selected.tax_id}` : ''}</p>
+              <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-tertiary)' }}>รหัส: {selected.code}{selected.tax_id ? ` · เลขภาษี: ${selected.tax_id}` : ''}</p>
             </div>
             <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-              <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: '#4A5A70' }}>เครดิต</p><p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{selected.payment_terms} วัน</p></div>
-              {selected.bank_account && <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: '#4A5A70' }}>บัญชีธนาคาร</p><p style={{ margin: 0, fontSize: 12, fontWeight: 700 }}>{selected.bank_name} {selected.bank_account}</p></div>}
-              {selected.wht_type && <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: '#4A5A70' }}>WHT</p><p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#F5A623' }}>{selected.wht_type}</p></div>}
+              <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)' }}>เครดิต</p><p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>{selected.payment_terms} วัน</p></div>
+              {selected.bank_account && <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)' }}>บัญชีธนาคาร</p><p style={{ margin: 0, fontSize: 12, fontWeight: 700 }}>{selected.bank_name} {selected.bank_account}</p></div>}
+              {selected.wht_type && <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)' }}>WHT</p><p style={{ margin: 0, fontSize: 13, fontWeight: 700, color: '#F5A623' }}>{selected.wht_type}</p></div>}
             </div>
-            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 16 }}>✕</button>
+            <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 16 }}>✕</button>
           </div>
-          {selected.address && <p style={{ margin: '10px 0 0', fontSize: 12, color: '#5A6A80' }}>📍 {selected.address}</p>}
+          {selected.address && <p style={{ margin: '10px 0 0', fontSize: 12, color: 'var(--color-text-tertiary)' }}>📍 {selected.address}</p>}
         </div>
       )}
 
       {/* Table */}
-      <div style={{ background: '#0D1018', border: '1px solid #151C28', borderRadius: 14, overflow: 'hidden' }}>
-        {isLoading ? <div style={{ padding: 48, textAlign: 'center', color: '#3A4A60' }}>กำลังโหลด...</div>
-        : filtered.length === 0 ? <div style={{ padding: 52, textAlign: 'center', color: '#3A4A60', fontSize: 13 }}>ไม่พบผู้จำหน่าย</div>
+      <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, overflow: 'hidden' }}>
+        {isLoading ? <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-dim)' }}>กำลังโหลด...</div>
+        : filtered.length === 0 ? <div style={{ padding: 52, textAlign: 'center', color: 'var(--color-dim)', fontSize: 13 }}>ไม่พบผู้จำหน่าย</div>
         : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['รหัส', 'ชื่อผู้จำหน่าย', 'เลขผู้เสียภาษี', 'ติดต่อ', 'เครดิต', 'ธนาคาร', 'WHT'].map(h => (
-                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: '#3A4A60', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid #151C28' }}>{h}</th>
+                  <th key={h} style={{ padding: '10px 14px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map(s => (
                 <tr key={s.id} onClick={() => setSelected(s)} style={{ cursor: 'pointer' }}>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontFamily: 'monospace', fontSize: 12, color: '#F093FB' }}>{s.code}</td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520' }}>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontFamily: 'monospace', fontSize: 12, color: '#F093FB' }}>{s.code}</td>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                     <p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{s.name}</p>
-                    {s.name_en && <p style={{ margin: 0, fontSize: 11, color: '#4A5A70' }}>{s.name_en}</p>}
+                    {s.name_en && <p style={{ margin: 0, fontSize: 11, color: 'var(--color-muted)' }}>{s.name_en}</p>}
                   </td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontSize: 12, color: '#6A7A90', fontFamily: 'monospace' }}>{s.tax_id || '—'}</td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontSize: 11, color: '#6A7A90' }}>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, color: 'var(--color-text-tertiary)', fontFamily: 'monospace' }}>{s.tax_id || '—'}</td>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 11, color: 'var(--color-text-tertiary)' }}>
                     {s.contact_name && <p style={{ margin: 0 }}>{s.contact_name}</p>}
                     {s.phone && <p style={{ margin: 0 }}>{s.phone}</p>}
                   </td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontSize: 12, color: '#F5A623' }}>{s.payment_terms} วัน</td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontSize: 11, color: '#4A5A70' }}>
-                    {s.bank_account ? <span style={{ color: '#4FACFE' }}>{s.bank_name}</span> : '—'}
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, color: '#F5A623' }}>{s.payment_terms} วัน</td>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 11, color: 'var(--color-muted)' }}>
+                    {s.bank_account ? <span style={{ color: 'var(--color-accent-light)' }}>{s.bank_name}</span> : '—'}
                   </td>
-                  <td style={{ padding: '11px 14px', borderBottom: '1px solid #0F1520', fontSize: 11 }}>
+                  <td style={{ padding: '11px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 11 }}>
                     {s.wht_type ? <span style={{ color: '#F5A623', fontWeight: 700 }}>{s.wht_type}</span> : '—'}
                   </td>
                 </tr>
@@ -156,9 +156,9 @@ export default function SuppliersPage() {
       {showCreate && (
         <div style={overlay} onClick={() => setShowCreate(false)}>
           <div style={modal} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #151C28' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>เพิ่มผู้จำหน่ายใหม่</h3>
-              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>
+              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
@@ -180,8 +180,8 @@ export default function SuppliersPage() {
                 <div><label style={lbl}>เครดิต (วัน)</label><input {...register('payment_terms', { valueAsNumber: true })} type="number" min="0" placeholder="30" style={inp} /></div>
               </div>
               {/* Bank */}
-              <div style={{ borderTop: '1px solid #151C28', paddingTop: 14 }}>
-                <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: '#4A5A70' }}>ข้อมูลธนาคาร (สำหรับโอนเงิน)</p>
+              <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: 14 }}>
+                <p style={{ margin: '0 0 12px', fontSize: 11, fontWeight: 700, color: 'var(--color-muted)' }}>ข้อมูลธนาคาร (สำหรับโอนเงิน)</p>
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div><label style={lbl}>ธนาคาร</label><input {...register('bank_name')} placeholder="ธ.กรุงเทพ" style={inp} /></div>
                   <div><label style={lbl}>เลขบัญชี</label><input {...register('bank_account')} placeholder="123-4-56789-0" style={inp} /></div>
@@ -199,8 +199,8 @@ export default function SuppliersPage() {
               </div>
               {createM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>เกิดข้อผิดพลาด — รหัสอาจซ้ำ</p></div>}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4 }}>
-                <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid #1E2A3A', background: 'transparent', color: '#6A7A90', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
-                <button type="submit" disabled={createM.isPending} style={{ background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', color: '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '9px 20px', cursor: 'pointer', opacity: createM.isPending ? 0.7 : 1 }}>
+                <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
+                <button type="submit" disabled={createM.isPending} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '9px 20px', cursor: 'pointer', opacity: createM.isPending ? 0.7 : 1 }}>
                   {createM.isPending ? 'กำลังบันทึก...' : 'บันทึก'}
                 </button>
               </div>

@@ -1,5 +1,9 @@
 from fastapi import APIRouter
-from api.v1.endpoints import auth, users, accounts, journals, ar, ap, dashboard, inventory, payroll, tax, reports, audit, report_builder, chat_v2, fraud, analytics, documents, company, api_platform, ai_ops, security, readiness
+from api.v1.endpoints import (
+    auth, users, accounts, journals, ar, sales, ap, dashboard, inventory, payroll, tax, reports, audit,
+    report_builder, chat_v2, company, pos, leave, doctemplate, document_books,
+    fraud, analytics, documents, api_platform, ai_ops, security, readiness,
+)
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -7,6 +11,7 @@ api_router.include_router(users.router)
 api_router.include_router(accounts.router)
 api_router.include_router(journals.router)
 api_router.include_router(ar.router)
+api_router.include_router(sales.router)
 api_router.include_router(ap.router)
 api_router.include_router(dashboard.router)
 api_router.include_router(inventory.router)
@@ -24,3 +29,7 @@ api_router.include_router(api_platform.router)
 api_router.include_router(ai_ops.router)
 api_router.include_router(security.router)
 api_router.include_router(readiness.router)
+api_router.include_router(pos.router)
+api_router.include_router(leave.router)
+api_router.include_router(doctemplate.router)
+api_router.include_router(document_books.router)

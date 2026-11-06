@@ -11,8 +11,9 @@ from fastapi import HTTPException
 
 from models.ap import (Supplier, Bill, BillItem, APPayment,
                        ApprovalRecord, BillStatus, ExpenseCategory)
-from models.accounting import Account, Journal, JournalEntry, JournalStatus, NormalBalance
+from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
+from services.document_books import resolve_book
 from schemas.ap import (SupplierCreate, SupplierUpdate,
                         BillCreate, APPaymentCreate, ApprovalAction)
 
@@ -102,6 +103,8 @@ def create_bill(db: Session, payload: BillCreate, user_id: Optional[UUID] = None
         due = payload.due_date or (payload.date + timedelta(days=30))
         wht_type = None
 
+    resolve_book(db, payload.book_id, BookSide.EXPENSE)
+
     subtotal   = sum(it.amount for it in payload.items)
     vat_amount = (subtotal * payload.vat_rate / 100).quantize(Decimal("0.01"))
     total      = subtotal + vat_amount
@@ -117,7 +120,7 @@ def create_bill(db: Session, payload: BillCreate, user_id: Optional[UUID] = None
         wht_rate=payload.wht_rate, wht_amount=wht_amount,
         subtotal=subtotal, total=total,
         net_payable=net_payable, paid_amount=Decimal("0"), balance_due=net_payable,
-        note=payload.note, created_by=user_id,
+        note=payload.note, created_by=user_id, book_id=payload.book_id,
     )
     db.add(bill); db.flush()
 
@@ -185,14 +188,17 @@ def post_bill_to_gl(db: Session, bill_id: UUID, user_id: Optional[UUID] = None) 
     if bill.status not in (BillStatus.APPROVED, BillStatus.DRAFT):
         raise HTTPException(400, "Bill ต้องอยู่ในสถานะ Approved หรือ Draft ก่อน Post GL")
 
-    # Find accounts
-    ap_acc    = _find_acc(db, ["2101","21"])
+    # A สมุดบันทึก on the bill overrides the default mapping: its expense account (ahead of the
+    # bill's category), its counter account (เจ้าหนี้ or เงินสด) and its journal.
+    book = bill.book
+    ap_acc    = (book and book.counter_account) or _find_acc(db, ["2101","21"])
     vat_acc   = _find_acc(db, ["1401","14"])      # VAT Input
     wht_acc   = _find_acc(db, ["2104","21"])      # WHT Payable
+    journal_type = book.journal_type if book else JournalType.PURCHASE
 
-    # Use category's account or fallback to generic expense
-    exp_acc = None
-    if bill.category and bill.category.gl_account:
+    # Book's account, then category's account, then a generic expense
+    exp_acc = book.account if book else None
+    if not exp_acc and bill.category and bill.category.gl_account:
         exp_acc = bill.category.gl_account
     if not exp_acc:
         exp_acc = _find_acc(db, ["5401","5301","5302","51","50"])
@@ -217,7 +223,7 @@ def post_bill_to_gl(db: Session, bill_id: UUID, user_id: Optional[UUID] = None) 
 
     _create_posted_journal(db, bill.date,
                            f"Bill {bill.number} — {bill.description}",
-                           bill.number, entries, user_id)
+                           bill.number, entries, user_id, journal_type)
     bill.gl_posted = True
     db.commit(); db.refresh(bill)
     return bill
@@ -256,7 +262,7 @@ def pay_bill(db: Session, payload: APPaymentCreate, user_id: Optional[UUID] = No
         ]
         j = _create_posted_journal(db, payload.date,
                                    f"จ่ายชำระ {bill.number} — {bill.description}",
-                                   payload.reference or bill.number, entries, user_id)
+                                   payload.reference or bill.number, entries, user_id, JournalType.PAYMENT)
         payment.gl_posted     = True
         payment.gl_journal_id = j.id
 
@@ -308,10 +314,11 @@ def _find_acc(db: Session, prefixes: List[str]) -> Optional[Account]:
     return None
 
 
-def _create_posted_journal(db: Session, j_date, description, reference, entries_data, user_id) -> Journal:
+def _create_posted_journal(db: Session, j_date, description, reference, entries_data, user_id,
+                           journal_type: JournalType = JournalType.GENERAL) -> Journal:
     j = Journal(
         number=next_journal_number(db, j_date),
-        date=j_date, description=description, reference=reference,
+        date=j_date, description=description, reference=reference, journal_type=journal_type,
         status=JournalStatus.POSTED, created_by=user_id,
     )
     db.add(j); db.flush()

@@ -8,7 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from core.config import settings
 from core.database import Base
-import models.user  # import all models here
+import models.registry  # noqa: F401 — every model, so autogenerate sees the whole schema
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)

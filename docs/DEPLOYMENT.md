@@ -1,5 +1,9 @@
 # MeAccount — Deployment Guide
 
+> Step-by-step hosting on a free Oracle Cloud VM with Coolify (production + staging, auto-deploy,
+> nightly backups): see [DEPLOY_ORACLE_COOLIFY.md](DEPLOY_ORACLE_COOLIFY.md). This page covers the
+> environment variables and checks that apply to any host.
+
 ## Before you deploy: run the readiness scan
 
 Once the API is running with a real database and admin login, hit:
@@ -28,7 +32,15 @@ SECRET_KEY=<32+ char random string>
 FIELD_ENCRYPTION_KEY=<Fernet.generate_key() output>
 
 # Database (PostgreSQL required for production — SQLite is dev/test only)
-DATABASE_URL=postgresql://user:pass@host:5432/meaccount
+# Either set the POSTGRES_* parts individually:
+POSTGRES_HOST=<host>
+POSTGRES_PORT=5432
+POSTGRES_DB=meaccount
+POSTGRES_USER=<user>
+POSTGRES_PASSWORD=<strong-password>
+# ...or override the whole connection string in one go (takes precedence,
+# useful for managed-Postgres providers that hand you a full URL):
+# DATABASE_URL_OVERRIDE=postgresql://user:pass@host:5432/meaccount
 
 # Redis
 REDIS_HOST=<your-redis-host>
@@ -83,7 +95,7 @@ Interactive API docs (Swagger UI): `/docs`
 
 ## Test Coverage
 
-286 automated tests across 22 test files, covering every module from Phase 1
+371 automated tests across 24 test files, covering every module from Phase 1
 through Phase 4. Run the full suite:
 ```bash
 pytest tests/ -v

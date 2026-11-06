@@ -8,6 +8,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 from core.database import SessionLocal, engine, Base
 from core.security import hash_password
 from models.user import User, UserRole
+import models.registry  # noqa: F401 — loads every model so FKs resolve
 
 Base.metadata.create_all(bind=engine)
 

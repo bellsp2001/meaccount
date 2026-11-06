@@ -12,9 +12,9 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const styles: Record<Variant, string> = {
-  primary:   'bg-gradient-to-r from-[#00D4AA] to-[#4FACFE] text-[#07090E] font-bold hover:opacity-90',
-  secondary: 'bg-[#151C28] border border-[#1E2A3A] text-[#DDE3EE] hover:bg-[#1A2235]',
-  ghost:     'bg-transparent text-[#4A5A70] hover:text-[#DDE3EE] hover:bg-[#0D1018]',
+  primary:   'bg-gradient-to-r from-[var(--color-accent)] to-[var(--color-accent-strong)] text-[var(--color-on-accent)] font-bold hover:opacity-90',
+  secondary: 'bg-[var(--color-border)] border border-[var(--color-border-strong)] text-[var(--color-text)] hover:bg-[var(--color-bg-inset)]',
+  ghost:     'bg-transparent text-[var(--color-muted)] hover:text-[var(--color-text)] hover:bg-[var(--color-card)]',
   danger:    'bg-[#FF6B6B20] border border-[#FF6B6B40] text-[#FF6B6B] hover:bg-[#FF6B6B30]',
 }
 const sizes: Record<Size, string> = {

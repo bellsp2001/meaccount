@@ -7,30 +7,14 @@ from core.database import engine, Base
 from core.config import settings
 from api.v1.router import api_router
 
-import models.user        # noqa
-import models.accounting  # noqa
-import models.ar          # noqa
-import models.ap          # noqa
-import models.inventory   # noqa
-import models.payroll     # noqa
-import models.tax         # noqa
-import models.period      # noqa
-import models.report      # noqa
-import models.knowledge   # noqa
-import models.fraud       # noqa
-import models.document    # noqa
-import models.company     # noqa
-import models.api_platform # noqa
-import models.ai_ops       # noqa
-import models.security     # noqa
-import models.period      # noqa
+import models.registry    # noqa: F401 — loads every model so FKs resolve; see models/registry.py
 
 TESTING = os.getenv("TESTING", "false").lower() == "true"
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    if not TESTING:
+    if not TESTING and settings.AUTO_CREATE_SCHEMA:
         Base.metadata.create_all(bind=engine)
     yield
 
@@ -38,7 +22,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="MeAccount API",
     description="AI-Powered Accounting Platform",
-    version="4.0.0",
+    version="4.3.0",
     lifespan=lifespan,
 )
 
@@ -55,4 +39,4 @@ app.include_router(api_router, prefix="/api/v1")
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "app": "MeAccount", "version": "1.1.0", "sprint": "Phase 4 W43-44 Production Go-Live — Phase 4 COMPLETE"}
+    return {"status": "ok", "app": "MeAccount", "version": "1.1.0", "sprint": "Phase 5 W49-50 Document Template Editor — Phase 5 COMPLETE"}

@@ -1,38 +1,244 @@
 @import "tailwindcss";
 
+/* ─────────────────────────────────────────────────────────────
+   MeAccount design system — Odoo-clean surfaces + iOS "liquid glass"
+   Light mode = the Odoo-style bright product. Dark = iOS glass at night.
+   ───────────────────────────────────────────────────────────── */
+
 :root {
-  --color-accent: #00D4AA;
-  --color-accent-light: #4FACFE;
-  --color-bg: #07090E;
-  --color-card: #0D1018;
-  --color-border: #151C28;
-  --color-text: #DDE3EE;
-  --color-muted: #4A5A70;
+  /* soft "tavola" coral/peach accent */
+  --color-accent: #E8926F;
+  --color-accent-strong: #D5704E;
+  --color-accent-light: #F4B49C;
+  --color-on-accent: #1A1207;
+
+  /* surfaces — deep flat navy like tavola */
+  --color-bg: #0A0E1A;
+  --color-bg-inset: rgba(255, 255, 255, 0.05);
+  --color-card: rgba(255, 255, 255, 0.06);
+  --color-popover: rgba(19, 26, 43, 0.96);
+  --color-card-solid: #131A2B;
+  --color-border: rgba(255, 255, 255, 0.07);
+  --color-border-subtle: rgba(255, 255, 255, 0.04);
+  --color-border-strong: rgba(255, 255, 255, 0.13);
+
+  /* text */
+  --color-text: #E9EDF6;
+  --color-text-secondary: #AAB3C6;
+  --color-text-tertiary: #828BA0;
+  --color-muted: #8A93A8;
+  --color-dim: #727B90;
+
+  /* flat deep-navy wallpaper with one faint warm glow at the top */
+  --bg-wallpaper: radial-gradient(1300px 760px at 50% -14%, rgba(232, 146, 111, 0.05), transparent 62%);
+
+  /* glass + type */
+  --glass-blur: 22px;
+  --glass-hi: rgba(255, 255, 255, 0.08);
+  --font-display: "Inter", "IBM Plex Sans Thai", system-ui, sans-serif;
+  /* one step below the chrome: shorter and lighter than --chrome-shadow */
+  --shadow-card: inset 0 1px 2px rgba(255,255,255,0.05), 0 1px 2px rgba(0,0,0,0.30), 0 6px 14px -5px rgba(0,0,0,0.30), 0 16px 26px -14px rgba(0,0,0,0.45);
+  --shadow-pop: 0 14px 48px -12px rgba(0,0,0,0.65);
+
+  /* floating chrome (sidebar + top bar) — lit from above, so shadows fall downward */
+  --chrome-bg:
+    linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,0) 90px),
+    linear-gradient(165deg, rgba(150,140,235,.26), rgba(110,130,225,.16));
+  --chrome-text: #F1F0F8;
+  --chrome-text-soft: #C9C8DA;
+  --chrome-line: rgba(255,255,255,.12);
+  --chrome-hover: rgba(255,255,255,.07);
+  --chrome-active: linear-gradient(180deg, rgba(255,255,255,.15), rgba(255,255,255,.07));
+  --chrome-toggle: rgba(70,62,120,.85);
+  --chrome-badge-bg: #FFFFFF;
+  --chrome-badge-text: #111111;
+  --chrome-shadow:
+    inset 0 1px 2px rgba(255,255,255,.07),
+    0 2px 4px rgba(0,0,0,.45),
+    0 12px 22px -6px rgba(0,0,0,.50),
+    0 36px 56px -16px rgba(0,0,0,.75);
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --color-accent: #E85D3D;
+  --color-accent-strong: #CF4A2C;
+  --color-accent-light: #F2714E;
+  --color-on-accent: #FFFFFF;
+
+  --bg-wallpaper:
+    radial-gradient(760px 620px at 92% 78%, rgba(110, 120, 235, 0.16), transparent 70%),
+    radial-gradient(680px 560px at 42% 62%, rgba(242, 113, 78, 0.11), transparent 70%),
+    radial-gradient(620px 520px at 2% 12%, rgba(242, 113, 78, 0.16), transparent 70%),
+    radial-gradient(700px 420px at 60% -8%, rgba(110, 120, 235, 0.16), transparent 70%),
+    radial-gradient(1100px 760px at 12% -10%, rgba(255, 244, 232, 0.9), transparent 62%),
+    radial-gradient(900px 640px at 102% 2%, rgba(56, 90, 150, 0.07), transparent 55%),
+    radial-gradient(820px 720px at 58% 112%, rgba(242, 113, 78, 0.05), transparent 55%);
+
+  --color-bg: #F5F3F1;
+  --color-bg-inset: rgba(255, 255, 255, 0.45);
+  --color-card: rgba(255, 255, 255, 0.38);
+  --color-popover: rgba(255, 255, 255, 0.96);
+  --color-card-solid: #FFFFFF;
+  --color-border: rgba(30, 27, 24, 0.09);
+  --color-border-subtle: rgba(30, 27, 24, 0.05);
+  --color-border-strong: rgba(30, 27, 24, 0.14);
+
+  --color-text: #211C19;
+  --color-text-secondary: #4C463F;
+  --color-text-tertiary: #645D54;
+  --color-muted: #6F675D;
+  --color-dim: #80776C;
+
+  --glass-hi: rgba(255, 255, 255, 0.65);
+  --shadow-card: inset 0 1px 2px rgba(255,255,255,0.5), 0 1px 2px rgba(50,40,90,0.07), 0 6px 14px -5px rgba(50,40,90,0.10), 0 16px 26px -14px rgba(50,40,90,0.16);
+  --shadow-pop: 0 12px 44px -10px rgba(30,27,24,0.22);
+
+  /* clear tinted glass: a dark tint at low alpha turns muddy over a bright page, so tint light and use dark text */
+  --chrome-bg:
+    linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0) 90px),
+    linear-gradient(165deg, rgba(135,120,235,.34), rgba(100,140,235,.24));
+  --chrome-text: #211C2E;
+  --chrome-text-soft: #4B4660;
+  --chrome-line: rgba(50,40,90,.12);
+  --chrome-hover: rgba(255,255,255,.35);
+  --chrome-active: linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,.45));
+  --chrome-toggle: rgba(255,255,255,.85);
+  --chrome-badge-bg: #2A2540;
+  --chrome-badge-text: #FFFFFF;
+  --chrome-shadow:
+    inset 0 1px 2px rgba(255,255,255,.55),
+    0 2px 4px rgba(50,40,90,.14),
+    0 12px 22px -6px rgba(50,40,90,.20),
+    0 36px 56px -16px rgba(50,40,90,.34);
+  color-scheme: light;
+}
+
+/* Page-level modals live inside .content-scroll: while one is open, drop the mask (it would clip
+   the modal to the scroller) and give its panels opaque surfaces instead of clear glass. */
+.content-scroll {
+  mask-image: linear-gradient(to bottom, transparent, #000 14px);
+  -webkit-mask-image: linear-gradient(to bottom, transparent, #000 14px);
+}
+.content-scroll:has(.fixed, [style*="position: fixed"]) {
+  mask-image: none;
+  -webkit-mask-image: none;
+}
+.fixed, [style*="position: fixed"] {
+  --color-card: var(--color-popover);
 }
 
 * { box-sizing: border-box; }
 
 body {
   background-color: var(--color-bg);
+  /* flat deep navy in dark (tavola); soft iOS wallpaper in light */
+  background-image: var(--bg-wallpaper);
+  background-attachment: fixed;
   color: var(--color-text);
-  font-family: "IBM Plex Sans Thai", "IBM Plex Sans", system-ui, sans-serif;
+  font-family: "IBM Plex Sans Thai", "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
 }
 
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-accent) 45%, transparent) transparent;
+}
+*::-webkit-scrollbar { width: 8px; height: 8px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--color-accent) 40%, transparent); border-radius: 8px; }
+*::-webkit-scrollbar-thumb:hover { background: var(--color-accent); }
+
 @layer utilities {
-  .card { background: var(--color-card); border: 1px solid var(--color-border); border-radius: 12px; }
+  /* overlays (dropdowns, dock, login): stay near-opaque so content behind can't hurt legibility */
+  .glass {
+    background: var(--color-popover);
+    backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  }
+  /* Stronger frosted bar for the top bar + sidebar — more blur, a crisp inner
+     highlight and a soft lift so the chrome reads clearly over the content. */
+  .glass-bar {
+    background: var(--color-card);
+    backdrop-filter: blur(32px) saturate(185%);
+    -webkit-backdrop-filter: blur(32px) saturate(185%);
+    box-shadow: inset 0 1px 0 var(--glass-hi), var(--shadow-card);
+  }
+  .chrome-panel {
+    color: var(--chrome-text);
+    position: relative;
+  }
+  /* Shadow and glass are separate layers with no stacking context on the panel itself,
+     so every panel's shadow sits under every panel's glass and they blend as one level. */
+  .chrome-panel::before, .chrome-panel::after {
+    content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none;
+  }
+  .chrome-panel::before { z-index: -2; box-shadow: var(--chrome-shadow); }
+  .chrome-panel::after {
+    z-index: -1;
+    background: var(--chrome-bg);
+    backdrop-filter: blur(18px) saturate(180%);
+    -webkit-backdrop-filter: blur(18px) saturate(180%);
+  }
+  .card {
+    background: var(--color-card);
+    border-radius: 20px;
+    box-shadow: var(--shadow-card);
+    backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(170%);
+  }
+  /* tavola-style pill chip */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: var(--color-bg-inset);
+    border-radius: 999px; padding: 7px 14px;
+    box-shadow: 0 1px 2px rgba(40,28,24,.12), 0 4px 10px -4px rgba(40,28,24,.16);
+    font-size: 12px; color: var(--color-text-secondary); font-weight: 600;
+  }
+  .pill-accent {
+    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong));
+    border-color: transparent; color: var(--color-on-accent);
+    box-shadow: 0 6px 16px -6px color-mix(in srgb, var(--color-accent) 60%, transparent);
+  }
+  /* segmented toggle */
+  .seg {
+    display: inline-flex; background: var(--color-bg-inset);
+    border-radius: 999px; padding: 3px;
+    box-shadow: 0 1px 2px rgba(40,28,24,.12), 0 4px 10px -4px rgba(40,28,24,.16);
+  }
+  .seg > button {
+    border: none; background: transparent; cursor: pointer;
+    border-radius: 999px; padding: 6px 14px; font-size: 12px; font-weight: 600;
+    color: var(--color-text-tertiary); transition: all 0.15s;
+  }
+  .seg > button[data-active="true"] {
+    background: var(--color-accent); color: var(--color-on-accent);
+    box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--color-accent) 60%, transparent);
+  }
   .btn-primary {
-    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-light));
-    color: var(--color-bg); font-weight: 700; border-radius: 8px;
+    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong));
+    color: var(--color-on-accent); font-weight: 700; border-radius: 12px;
     padding: 10px 20px; border: none; cursor: pointer;
-    transition: opacity 0.15s;
+    letter-spacing: 0.01em;
+    box-shadow: 0 6px 18px -6px color-mix(in srgb, var(--color-accent) 65%, transparent);
+    transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
   }
-  .btn-primary:hover { opacity: 0.88; }
+  .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 10px 24px -8px color-mix(in srgb, var(--color-accent) 70%, transparent); }
+  .btn-primary:active { transform: translateY(0); }
   .input-field {
-    background: #0A0E18; border: 1px solid var(--color-border);
-    border-radius: 8px; padding: 10px 14px; color: var(--color-text);
+    background: var(--color-bg-inset); border: 1px solid var(--color-border);
+    border-radius: 10px; padding: 10px 14px; color: var(--color-text);
     width: 100%; font-size: 14px; outline: none;
-    transition: border-color 0.15s;
+    transition: border-color 0.15s, box-shadow 0.15s;
   }
-  .input-field:focus { border-color: var(--color-accent); }
+  .input-field:focus {
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-accent) 22%, transparent);
+  }
+  /* horizontal nav strips — scroll without a visible scrollbar */
+  .nav-scroll { scrollbar-width: none; }
+  .nav-scroll::-webkit-scrollbar { display: none; }
+  .font-display { font-family: var(--font-display); letter-spacing: -0.01em; }
+  .dock-app { transition: transform 0.15s ease; }
+  .dock-app:hover { transform: translateY(-6px) scale(1.06); }
 }

@@ -1,168 +1,196 @@
-import { NavLink, useNavigate, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAuthStore } from '@/store/auth'
-import type { UserRole } from '@/types'
+import { AppIcon } from '@/config/icons'
+import { allowedNav, findActiveNav } from '@/config/nav'
 
-interface SubItem { to: string; label: string }
-interface NavItem { to: string; icon: string; label: string; roles: UserRole[]; badge?: string; children?: SubItem[] }
-
-const NAV: NavItem[] = [
-  { to: '/dashboard', icon: '◈', label: 'แดชบอร์ด', roles: ['admin','accountant','cashier','inventory','manager','auditor'] },
-  {
-    to: '/ar', icon: '⬆', label: 'ลูกหนี้ (AR)', roles: ['admin','accountant','cashier'],
-    children: [
-      { to: '/ar',           label: 'ใบแจ้งหนี้' },
-      { to: '/ar/customers', label: 'รายชื่อลูกค้า' },
-      { to: '/ar/aging',     label: 'รายงานอายุหนี้' },
-    ],
-  },
-  {
-    to: '/ap', icon: '⬇', label: 'เจ้าหนี้ (AP)', roles: ['admin','accountant','cashier'],
-    children: [
-      { to: '/ap',            label: 'บิล / ค่าใช้จ่าย' },
-      { to: '/ap/suppliers',  label: 'รายชื่อผู้จำหน่าย' },
-    ],
-  },
-  {
-    to: '/gl', icon: '⚖', label: 'บัญชีแยกประเภท', roles: ['admin','accountant'],
-    children: [
-      { to: '/gl',         label: 'ผังบัญชี' },
-      { to: '/gl/journal', label: 'สมุดรายวัน' },
-    ],
-  },
-  {
-    to: '/inventory', icon: '▦', label: 'สินค้าคงคลัง', roles: ['admin','inventory','accountant'],
-    children: [
-      { to: '/inventory',           label: 'รายการสินค้า' },
-      { to: '/inventory/movements', label: 'รับ/จ่ายสินค้า' },
-    ],
-  },
-  { to: '/payroll',   icon: '◎', label: 'เงินเดือน',    roles: ['admin','accountant'] },
-  { to: '/tax',       icon: '⬡', label: 'ภาษี',         roles: ['admin','accountant'] },
-  {
-    to: '/reports', icon: '◉', label: 'รายงาน', roles: ['admin','accountant','manager','auditor'],
-    children: [
-      { to: '/reports',         label: 'งบการเงิน' },
-      { to: '/reports/builder', label: 'Report Builder' },
-      { to: '/reports/ask',     label: 'ถามด้วยภาษาพูด' },
-    ],
-  },
-  { to: '/ai-chat',   icon: '🤖', label: 'AI Assistant', roles: ['admin','accountant','manager'], badge: 'Beta' },
-  { to: '/audit',     icon: '🔍', label: 'AI Audit',       roles: ['admin','manager','auditor'] },
-  { to: '/fraud',     icon: '🛡️', label: 'Fraud Detection', roles: ['admin','manager','auditor'] },
-  { to: '/analytics', icon: '📈', label: 'Predictive Analytics', roles: ['admin','accountant','manager'] },
-  {
-    to: '/documents', icon: '📁', label: 'Document AI', roles: ['admin','accountant','cashier'], badge: 'New',
-    children: [
-      { to: '/documents',       label: 'Document Center' },
-      { to: '/documents/match', label: '3-Way Match' },
-    ],
-  },
-  {
-    to: '/companies', icon: '🏢', label: 'บริษัทในเครือ', roles: ['admin','accountant'], badge: 'New',
-    children: [
-      { to: '/companies',             label: 'บริษัททั้งหมด' },
-      { to: '/companies/consolidated', label: 'งบการเงินรวม' },
-    ],
-  },
-  {
-    to: '/developer', icon: '🔌', label: 'Developer', roles: ['admin','accountant'], badge: 'New',
-    children: [
-      { to: '/developer/keys',         label: 'API Keys' },
-      { to: '/developer/integrations', label: 'Integrations' },
-    ],
-  },
-  {
-    to: '/ai-ops', icon: '🧠', label: 'AI Ops', roles: ['admin','accountant'], badge: 'New',
-    children: [
-      { to: '/ai-ops/profiles',    label: 'Prompt Profiles' },
-      { to: '/ai-ops/ab-testing',  label: 'A/B Testing' },
-    ],
-  },
-  {
-    to: '/security', icon: '🛡️', label: 'Security & Compliance', roles: ['admin'], badge: 'New',
-    children: [
-      { to: '/security/compliance', label: 'Compliance Scanner' },
-      { to: '/security/dsr',        label: 'Data Requests (PDPA)' },
-    ],
-  },
-  { to: '/ops/readiness', icon: '🚀', label: 'Go-Live Readiness', roles: ['admin'], badge: 'New' },
-  { to: '/users',     icon: '👥', label: 'จัดการผู้ใช้', roles: ['admin'] },
-]
-
+// Glassy Sidebar V3 — purple/blue frosted panel, collapsible, with the MeAccount
+// brand logo and an icon menu wired to the real nav.
 export function Sidebar() {
-  const { user, logout } = useAuthStore()
+  const { user } = useAuthStore()
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const allowed = NAV.filter(n => user && n.roles.includes(user.role as UserRole))
+  // Narrow windows start (and fall back to) icon width so the content keeps usable room;
+  // the toggle still expands it on demand.
+  const [collapsed, setCollapsed] = useState(() => window.matchMedia(NARROW).matches)
+  useEffect(() => {
+    const mq = window.matchMedia(NARROW)
+    const onChange = (e: MediaQueryListEvent) => setCollapsed(e.matches)
+    mq.addEventListener('change', onChange)
+    return () => mq.removeEventListener('change', onChange)
+  }, [])
 
-  const isGroupActive = (item: NavItem) =>
-    pathname === item.to ||
-    item.children?.some(c => pathname === c.to) ||
-    (pathname.startsWith(item.to + '/') && item.to !== '/dashboard')
+  const apps = allowedNav(user?.role)
+  const active = findActiveNav(pathname, apps)
+
+  const go = (to: string) => (e: React.MouseEvent) => { e.preventDefault(); navigate(to) }
+
+  // One module open at a time; follows the route so deep links reveal their sub-menu.
+  const [openTo, setOpenTo] = useState<string | undefined>(active?.to)
+  useEffect(() => { setOpenTo(active?.to) }, [active?.to])
+
+  const clickParent = (to: string, hasChildren: boolean) => (e: React.MouseEvent) => {
+    e.preventDefault()
+    if (collapsed && hasChildren) {
+      // Sub-items can't show at icon width, so expand rather than leave them unreachable.
+      setCollapsed(false)
+      setOpenTo(to)
+    } else if (hasChildren && openTo === to && active?.to === to) {
+      setOpenTo(undefined)
+      return
+    } else {
+      setOpenTo(to)
+    }
+    navigate(to)
+  }
+
+  // Longest matching route, so a detail page under /ar/orders marks "คำสั่งขาย" rather than /ar.
+  const activeSub = active?.children
+    ?.filter(t => pathname === t.to || pathname.startsWith(`${t.to}/`))
+    .sort((a, b) => b.to.length - a.to.length)[0]
 
   return (
-    <aside style={{ width: 232, minHeight: '100vh', background: '#0A0C12', borderRight: '1px solid #151C28', display: 'flex', flexDirection: 'column', flexShrink: 0 }}>
-      {/* Logo */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '18px 20px', borderBottom: '1px solid #151C28' }}>
-        <div style={{ width: 36, height: 36, borderRadius: 10, background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 900, color: '#07090E', fontSize: 18, boxShadow: '0 0 16px #00D4AA33', flexShrink: 0 }}>M</div>
-        <div>
-          <p style={{ margin: 0, fontWeight: 800, fontSize: 14, lineHeight: 1.2 }}>Me<span style={{ color: '#00D4AA' }}>Account</span></p>
-          <p style={{ margin: 0, fontSize: 9, color: '#2A3A50', textTransform: 'uppercase', letterSpacing: '0.15em' }}>AI Platform</p>
-        </div>
-      </div>
+    <aside className={`gsb-sidebar chrome-panel${collapsed ? ' collapsed' : ''}`}>
+      <style>{GSB_CSS}</style>
 
-      {/* Nav */}
-      <nav style={{ flex: 1, padding: '12px 10px', overflowY: 'auto' }}>
-        <p style={{ margin: '0 0 8px', padding: '0 10px', fontSize: 9, fontWeight: 700, color: '#2A3A50', textTransform: 'uppercase', letterSpacing: '0.15em' }}>เมนูหลัก</p>
-        {allowed.map(item => {
-          const active = isGroupActive(item)
+      {/* brand logo */}
+      <button className="gsb-logo-row" onClick={() => navigate('/dashboard')} aria-label="MeAccount">
+        <img className="gsb-logo-img" src="/meaccount-logo.png" alt="MeAccount" />
+        <span className="gsb-logo-text">Me<span>Account</span></span>
+      </button>
+
+      {/* collapse toggle */}
+      <button className="gsb-toggle" onClick={() => setCollapsed(c => !c)} aria-label="Toggle sidebar">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+      </button>
+
+      <div className="gsb-divider" />
+
+      <div className="gsb-label">เมนู</div>
+
+      {/* main menu */}
+      <ul className="gsb-menu gsb-scroll">
+        {apps.map(item => {
+          const hasChildren = !!item.children?.length
+          const expanded = hasChildren && !collapsed && openTo === item.to
           return (
-            <div key={item.to}>
-              <NavLink to={item.to} style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '9px 10px', borderRadius: 8, marginBottom: 2,
-                textDecoration: 'none', fontSize: 13, transition: 'all 0.15s',
-                background: active ? '#00D4AA12' : 'transparent',
-                color: active ? '#00D4AA' : '#5A6A80',
-                fontWeight: active ? 600 : 400,
-              }}>
-                <span style={{ width: 20, textAlign: 'center', fontSize: 15 }}>{item.icon}</span>
-                <span style={{ flex: 1 }}>{item.label}</span>
-                {item.badge && <span style={{ fontSize: 9, fontWeight: 700, background: '#00D4AA20', color: '#00D4AA', border: '1px solid #00D4AA30', padding: '1px 6px', borderRadius: 10 }}>{item.badge}</span>}
-                {item.children && <span style={{ fontSize: 9, color: '#3A4A60' }}>{active ? '▾' : '▸'}</span>}
-              </NavLink>
-              {item.children && active && (
-                <div style={{ marginLeft: 30, marginBottom: 4 }}>
-                  {item.children.map(child => (
-                    <NavLink key={child.to} to={child.to} end style={({ isActive }) => ({
-                      display: 'block', padding: '6px 10px', borderRadius: 6, marginBottom: 1,
-                      textDecoration: 'none', fontSize: 12, transition: 'all 0.12s',
-                      color: isActive ? '#00D4AA' : '#4A5A70',
-                      background: isActive ? '#00D4AA0A' : 'transparent',
-                      fontWeight: isActive ? 600 : 400,
-                    })}>
-                      {child.label}
-                    </NavLink>
-                  ))}
+            <li key={item.to}>
+              <a href={item.to} onClick={clickParent(item.to, hasChildren)} data-title={item.label} aria-expanded={hasChildren ? expanded : undefined} className={active?.to === item.to ? 'active' : undefined}>
+                <AppIcon name={item.icon} size={21} strokeWidth={1.8} />
+                <span className="gsb-text">{item.label}</span>
+                {item.badge && <span className="gsb-badge">{item.badge}</span>}
+                {hasChildren && (
+                  <svg className={`gsb-chev${expanded ? ' open' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+                )}
+              </a>
+              {hasChildren && (
+                <div className={`gsb-sub${expanded ? ' open' : ''}`}>
+                  <ul>
+                    {item.children!.map(t => (
+                      <li key={t.to}>
+                        <a href={t.to} onClick={go(t.to)} aria-current={activeSub?.to === t.to ? 'page' : undefined}>{t.label}</a>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
               )}
-            </div>
+            </li>
           )
         })}
-      </nav>
-
-      {/* User */}
-      <div style={{ borderTop: '1px solid #151C28', padding: 14 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          <div style={{ width: 30, height: 30, borderRadius: '50%', background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#07090E', fontWeight: 700, fontSize: 12, flexShrink: 0 }}>
-            {user?.full_name?.charAt(0).toUpperCase()}
-          </div>
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <p style={{ margin: 0, fontSize: 11, fontWeight: 600, color: '#DDE3EE', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{user?.full_name}</p>
-            <p style={{ margin: 0, fontSize: 10, color: '#3A4A60', textTransform: 'capitalize' }}>{user?.role}</p>
-          </div>
-          <button onClick={() => { logout(); navigate('/login') }} title="ออกจากระบบ" style={{ background: 'none', border: 'none', color: '#3A4A60', cursor: 'pointer', fontSize: 14, padding: 4 }}>⏻</button>
-        </div>
-      </div>
+      </ul>
     </aside>
   )
 }
+
+const NARROW = '(max-width: 860px)'
+
+const GSB_CSS = `
+.gsb-sidebar {
+  position: relative; width: 232px; flex-shrink: 0; padding: 14px 10px 16px;
+  border-radius: 26px;
+  display: flex; flex-direction: column; min-height: 0;
+  transition: width .4s cubic-bezier(.65,0,.35,1); will-change: width;
+}
+.gsb-sidebar.collapsed { width: 64px; padding-left: 8px; padding-right: 8px; }
+
+.gsb-logo-row { display: flex; align-items: center; gap: 10px; height: 42px; padding: 0 6px;
+  background: none; border: none; cursor: pointer; width: 100%;
+  transition: gap .4s cubic-bezier(.65,0,.35,1), padding .4s cubic-bezier(.65,0,.35,1); }
+/* 3D mark from chained drop-shadows: a few stacked 1px layers for thickness, then a soft cast
+   shadow. The mark's black stroke would vanish on dark glass, so the dark theme adds a hairline
+   light rim around the silhouette. */
+.gsb-logo-img { width: 50px; height: auto; display: block; flex-shrink: 0;
+  --logo-rim: drop-shadow(0 0 .15px rgba(255,255,255,.7));
+  --logo-edge: rgba(8,5,22,.9);
+  --logo-cast: rgba(0,0,0,.6);
+  filter: var(--logo-rim)
+    drop-shadow(0 1px 0 var(--logo-edge)) drop-shadow(0 1px 0 var(--logo-edge)) drop-shadow(0 1px 0 var(--logo-edge))
+    drop-shadow(0 7px 7px var(--logo-cast));
+  transition: width .4s cubic-bezier(.65,0,.35,1); }
+:root[data-theme="light"] .gsb-logo-img { --logo-rim: drop-shadow(0 0 0 transparent); --logo-edge: rgba(40,30,70,.32); --logo-cast: rgba(40,30,70,.38); }
+.gsb-sidebar.collapsed .gsb-logo-img { width: 32px; } /* clears the toggle that overhangs the edge */
+.gsb-logo-text { font-family: var(--font-display); font-weight: 800; font-size: 18px; letter-spacing: -0.03em;
+  white-space: nowrap; color: var(--chrome-text); max-width: 170px; overflow: hidden; opacity: 1;
+  transition: opacity .28s ease, max-width .4s cubic-bezier(.65,0,.35,1); }
+.gsb-logo-text span { color: var(--color-accent); }
+.gsb-sidebar.collapsed .gsb-logo-row { gap: 0; padding: 0; justify-content: center; }
+.gsb-sidebar.collapsed .gsb-logo-text { opacity: 0; max-width: 0; }
+
+.gsb-toggle { position: absolute; top: 20px; right: -16px; width: 34px; height: 34px; border-radius: 50%;
+  display: grid; place-items: center; cursor: pointer; z-index: 3;
+  background: var(--chrome-toggle); border: none;
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 2px 3px rgba(40,30,70,.22), 0 8px 14px -3px rgba(40,30,70,.3);
+  color: var(--chrome-text); transition: transform .4s cubic-bezier(.65,0,.35,1); }
+.gsb-toggle svg { width: 16px; height: 16px; }
+.gsb-sidebar.collapsed .gsb-toggle { transform: rotate(180deg); width: 28px; height: 28px; right: -14px; top: 23px; }
+
+.gsb-divider { height: 1px; background: var(--chrome-line); margin: 14px 6px; flex-shrink: 0; }
+
+.gsb-label { font-size: 10px; letter-spacing: 1.5px; color: var(--chrome-text-soft); padding: 0 12px; margin: 2px 0 8px; flex-shrink: 0; }
+.gsb-sidebar.collapsed .gsb-label { text-align: center; padding: 0; font-size: 9px; }
+
+.gsb-menu { list-style: none; display: flex; flex-direction: column; gap: 3px; margin: 0; padding: 0; }
+.gsb-scroll { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+.gsb-scroll::-webkit-scrollbar { width: 6px; }
+.gsb-scroll::-webkit-scrollbar-thumb { background: var(--chrome-line); border-radius: 6px; }
+.gsb-menu a { position: relative; display: flex; align-items: center; gap: 10px; height: 39px; padding: 0 11px;
+  border-radius: 12px; border: 1px solid transparent; color: var(--chrome-text); text-decoration: none; font-size: 13.5px;
+  white-space: nowrap; overflow: hidden;
+  transition: background .25s, border-color .25s, padding .4s cubic-bezier(.65,0,.35,1), gap .4s cubic-bezier(.65,0,.35,1); }
+.gsb-menu a:hover { background: var(--chrome-hover); }
+.gsb-menu a.active { background: var(--chrome-active);
+  box-shadow: 0 1px 3px rgba(40,30,70,.14), 0 6px 12px -4px rgba(40,30,70,.2); }
+.gsb-menu svg { width: 21px; height: 21px; flex-shrink: 0; }
+.gsb-text { max-width: 170px; opacity: 1; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: opacity .28s ease, max-width .4s cubic-bezier(.65,0,.35,1); }
+.gsb-badge { margin-left: auto; padding: 0 6px; height: 19px; border-radius: 999px; background: var(--chrome-badge-bg); color: var(--chrome-badge-text);
+  font-size: 10px; font-weight: 700; display: grid; place-items: center; flex-shrink: 0; }
+
+.gsb-menu svg.gsb-chev { width: 14px; height: 14px; margin-left: auto; opacity: .65; transition: transform .28s cubic-bezier(.65,0,.35,1); }
+.gsb-menu svg.gsb-chev.open { transform: rotate(180deg); }
+.gsb-badge + svg.gsb-chev { margin-left: 6px; }
+.gsb-sidebar.collapsed .gsb-menu svg.gsb-chev { display: none; }
+
+/* slide-down: animate the row track so any number of sub-items needs no measuring */
+.gsb-sub { display: grid; grid-template-rows: 0fr; visibility: hidden;
+  transition: grid-template-rows .28s cubic-bezier(.65,0,.35,1), visibility .28s; }
+.gsb-sub.open { grid-template-rows: 1fr; visibility: visible; }
+.gsb-sub > ul { min-height: 0; overflow: hidden; list-style: none; margin: 0; padding: 0 0 0 20px; }
+.gsb-sub li:first-child { padding-top: 3px; }
+.gsb-sub li:last-child { padding-bottom: 3px; }
+.gsb-menu .gsb-sub a { height: 32px; padding: 0 10px 0 14px; border-radius: 10px; font-size: 13px; color: var(--chrome-text-soft); }
+.gsb-menu .gsb-sub a:hover { color: var(--chrome-text); }
+.gsb-menu .gsb-sub a[aria-current="page"] { color: var(--color-accent-strong); font-weight: 700; background: var(--chrome-hover); }
+:root:not([data-theme="light"]) .gsb-menu .gsb-sub a[aria-current="page"] { color: var(--color-accent-light); }
+@media (prefers-reduced-motion: reduce) { .gsb-sub, .gsb-menu svg.gsb-chev { transition: none; } }
+
+.gsb-sidebar.collapsed .gsb-menu a { gap: 0; padding: 0; justify-content: center; }
+.gsb-sidebar.collapsed .gsb-text { opacity: 0; max-width: 0; }
+.gsb-sidebar.collapsed .gsb-badge { position: absolute; top: 8px; left: 50%; margin-left: 6px;
+  min-width: 8px; width: 8px; height: 8px; padding: 0; font-size: 0; }
+.gsb-sidebar.collapsed .gsb-menu a { overflow: visible; }
+.gsb-sidebar.collapsed .gsb-menu a:hover::after { content: attr(data-title); position: absolute; left: 54px;
+  padding: 6px 12px; border-radius: 8px; background: rgba(20,15,40,.95); color: #fff; font-size: 12px; white-space: nowrap; z-index: 6;
+  box-shadow: 0 6px 20px rgba(0,0,0,.5); }
+`

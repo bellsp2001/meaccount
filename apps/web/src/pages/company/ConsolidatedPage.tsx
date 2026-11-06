@@ -42,23 +42,23 @@ export default function ConsolidatedPage() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
         <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>งบการเงินรวม</h2>
-        <p style={{ margin: '3px 0 0', fontSize: 12, color: '#4A5A70' }}>Consolidated Financial Statements พร้อม Elimination อัตโนมัติ</p>
+        <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>Consolidated Financial Statements พร้อม Elimination อัตโนมัติ</p>
       </div>
 
-      <div style={{ background: '#0D1018', border: '1px solid #151C28', borderRadius: 14, padding: '20px 24px' }}>
-        <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: '#4A5A70' }}>เลือกบริษัทที่ต้องการรวมงบ (อย่างน้อย 2 บริษัท)</p>
+      <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, padding: '20px 24px' }}>
+        <p style={{ margin: '0 0 12px', fontSize: 12, fontWeight: 700, color: 'var(--color-muted)' }}>เลือกบริษัทที่ต้องการรวมงบ (อย่างน้อย 2 บริษัท)</p>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16 }}>
           {companies.map(co => (
             <button key={co.id} onClick={() => toggle(co.id)}
-              style={{ background: selectedIds.includes(co.id) ? '#00D4AA15' : '#070A0F', border: `1px solid ${selectedIds.includes(co.id) ? '#00D4AA50' : '#151C28'}`, color: selectedIds.includes(co.id) ? '#00D4AA' : '#8A9BB0', borderRadius: 20, padding: '7px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+              style={{ background: selectedIds.includes(co.id) ? '#F2714E15' : 'var(--color-bg-inset)', border: `1px solid ${selectedIds.includes(co.id) ? '#F2714E50' : 'var(--color-border)'}`, color: selectedIds.includes(co.id) ? '#F2714E' : 'var(--color-text-secondary)', borderRadius: 20, padding: '7px 16px', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
               {selectedIds.includes(co.id) ? '✓ ' : ''}{co.name}
             </button>
           ))}
         </div>
         <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ background: '#070A0F', border: '1px solid #151C28', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#DDE3EE' }} />
-          <span style={{ color: '#4A5A70', fontSize: 12 }}>ถึง</span>
-          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ background: '#070A0F', border: '1px solid #151C28', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: '#DDE3EE' }} />
+          <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} style={{ background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: 'var(--color-text)' }} />
+          <span style={{ color: 'var(--color-muted)', fontSize: 12 }}>ถึง</span>
+          <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} style={{ background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '7px 10px', fontSize: 12, color: 'var(--color-text)' }} />
         </div>
       </div>
 
@@ -68,7 +68,7 @@ export default function ConsolidatedPage() {
         </div>
       )}
 
-      {isLoading && selectedIds.length >= 2 && <p style={{ color: '#3A4A60' }}>กำลังคำนวณ...</p>}
+      {isLoading && selectedIds.length >= 2 && <p style={{ color: 'var(--color-dim)' }}>กำลังคำนวณ...</p>}
 
       {consolidated && (
         <>
@@ -76,11 +76,11 @@ export default function ConsolidatedPage() {
             {[
               { l: 'รายได้รวม (หลังตัด)', v: fmtB(consolidated.consolidated_revenue), color: '#43E97B' },
               { l: 'ค่าใช้จ่ายรวม (หลังตัด)', v: fmtB(consolidated.consolidated_expense), color: '#F093FB' },
-              { l: 'กำไรสุทธิรวม', v: fmtB(consolidated.consolidated_net_profit), color: consolidated.consolidated_net_profit >= 0 ? '#00D4AA' : '#FF6B6B' },
+              { l: 'กำไรสุทธิรวม', v: fmtB(consolidated.consolidated_net_profit), color: consolidated.consolidated_net_profit >= 0 ? '#F2714E' : '#FF6B6B' },
               { l: 'ยอดตัดรายการระหว่างกัน', v: fmtB(consolidated.eliminations), color: '#F5A623' },
             ].map(s => (
-              <div key={s.l} style={{ background: '#0D1018', border: `1px solid ${s.color}20`, borderTop: `2px solid ${s.color}`, borderRadius: 12, padding: '14px 16px' }}>
-                <p style={{ margin: '0 0 4px', fontSize: 10, color: '#4A5A70' }}>{s.l}</p>
+              <div key={s.l} style={{ background: 'var(--color-card)', border: `1px solid ${s.color}20`, borderTop: `2px solid ${s.color}`, borderRadius: 12, padding: '14px 16px' }}>
+                <p style={{ margin: '0 0 4px', fontSize: 10, color: 'var(--color-muted)' }}>{s.l}</p>
                 <p style={{ margin: 0, fontSize: 15, fontWeight: 800, color: s.color }}>{s.v}</p>
               </div>
             ))}
@@ -94,16 +94,16 @@ export default function ConsolidatedPage() {
             </div>
           )}
 
-          <div style={{ background: '#0D1018', border: '1px solid #151C28', borderRadius: 14, overflow: 'hidden' }}>
+          <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, overflow: 'hidden' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead><tr>{['บริษัท', 'รายได้', 'ค่าใช้จ่าย', 'กำไรสุทธิ'].map(h => <th key={h} style={{ padding: '10px 16px', textAlign: h === 'บริษัท' ? 'left' : 'right', fontSize: 9, fontWeight: 700, color: '#3A4A60', textTransform: 'uppercase', borderBottom: '1px solid #151C28' }}>{h}</th>)}</tr></thead>
+              <thead><tr>{['บริษัท', 'รายได้', 'ค่าใช้จ่าย', 'กำไรสุทธิ'].map(h => <th key={h} style={{ padding: '10px 16px', textAlign: h === 'บริษัท' ? 'left' : 'right', fontSize: 9, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--color-border)' }}>{h}</th>)}</tr></thead>
               <tbody>
                 {consolidated.per_company.map(pc => (
                   <tr key={pc.company}>
-                    <td style={{ padding: '11px 16px', borderBottom: '1px solid #0F1520', fontSize: 13, fontWeight: 600 }}>{pc.company}</td>
-                    <td style={{ padding: '11px 16px', borderBottom: '1px solid #0F1520', fontSize: 12, fontFamily: 'monospace', textAlign: 'right', color: '#43E97B' }}>{fmtB(pc.revenue)}</td>
-                    <td style={{ padding: '11px 16px', borderBottom: '1px solid #0F1520', fontSize: 12, fontFamily: 'monospace', textAlign: 'right', color: '#F093FB' }}>{fmtB(pc.expense)}</td>
-                    <td style={{ padding: '11px 16px', borderBottom: '1px solid #0F1520', fontSize: 12, fontFamily: 'monospace', textAlign: 'right', fontWeight: 700, color: pc.net_profit >= 0 ? '#43E97B' : '#FF6B6B' }}>{fmtB(pc.net_profit)}</td>
+                    <td style={{ padding: '11px 16px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 13, fontWeight: 600 }}>{pc.company}</td>
+                    <td style={{ padding: '11px 16px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, fontFamily: 'monospace', textAlign: 'right', color: '#43E97B' }}>{fmtB(pc.revenue)}</td>
+                    <td style={{ padding: '11px 16px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, fontFamily: 'monospace', textAlign: 'right', color: '#F093FB' }}>{fmtB(pc.expense)}</td>
+                    <td style={{ padding: '11px 16px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, fontFamily: 'monospace', textAlign: 'right', fontWeight: 700, color: pc.net_profit >= 0 ? '#43E97B' : '#FF6B6B' }}>{fmtB(pc.net_profit)}</td>
                   </tr>
                 ))}
               </tbody>

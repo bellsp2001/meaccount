@@ -5,7 +5,10 @@ from typing import List
 class Settings(BaseSettings):
     APP_NAME: str = "MeAccount"
     DEBUG: bool = False
-    ALLOWED_ORIGINS: List[str] = ["http://localhost:5173", "http://localhost:3000"]
+    ALLOWED_ORIGINS: List[str] = [
+        "http://localhost:5173", "http://localhost:3000",
+        "http://127.0.0.1:5173", "http://127.0.0.1:3000",
+    ]
 
     POSTGRES_HOST: str = "localhost"
     POSTGRES_PORT: int = 5432
@@ -13,12 +16,27 @@ class Settings(BaseSettings):
     POSTGRES_USER: str = "meaccount"
     POSTGRES_PASSWORD: str = "changeme_secret"
 
+    # Optional explicit override. When set (e.g. DATABASE_URL=sqlite:///./x.db
+    # or a managed-Postgres connection string from a hosting provider), it wins
+    # over the POSTGRES_* parts below. This used to be a computed @property,
+    # which silently ignored any DATABASE_URL env var — meaning deployment docs
+    # that said "set DATABASE_URL" didn't actually work, and the DB-02 readiness
+    # check could never observe anything but the constructed Postgres URL.
+    DATABASE_URL_OVERRIDE: str = ""
+
     @property
     def DATABASE_URL(self) -> str:
+        if self.DATABASE_URL_OVERRIDE:
+            return self.DATABASE_URL_OVERRIDE
         return (
             f"postgresql://{self.POSTGRES_USER}:{self.POSTGRES_PASSWORD}"
             f"@{self.POSTGRES_HOST}:{self.POSTGRES_PORT}/{self.POSTGRES_DB}"
         )
+
+    # Dev convenience: create missing tables on startup. Production sets this to false and runs
+    # `alembic upgrade head` instead (see apps/api/docker-entrypoint.sh) — create_all would
+    # otherwise create new tables before their migration runs, and that migration would then fail.
+    AUTO_CREATE_SCHEMA: bool = True
 
     REDIS_HOST: str = "localhost"
     REDIS_PORT: int = 6379

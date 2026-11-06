@@ -13,11 +13,12 @@ interface Account {
   id: string; code: string; name: string; name_en: string | null
   account_type: AccountType; normal_balance: NormalBalance
   level: number; is_active: boolean; balance: number
+  description: string | null
   parent_id: string | null; children: Account[]
 }
 
 const TYPE_META: Record<AccountType, { label: string; color: string; icon: string }> = {
-  asset:     { label: 'สินทรัพย์',        color: '#4FACFE', icon: '🏦' },
+  asset:     { label: 'สินทรัพย์',        color: 'var(--color-accent-light)', icon: '🏦' },
   liability: { label: 'หนี้สิน',           color: '#FF6B6B', icon: '💳' },
   equity:    { label: 'ส่วนของผู้ถือหุ้น', color: '#F5A623', icon: '💼' },
   income:    { label: 'รายได้',            color: '#43E97B', icon: '⬆' },
@@ -35,8 +36,18 @@ const createSchema = z.object({
 })
 type CForm = z.infer<typeof createSchema>
 
+// Only what PATCH /accounts/{id} accepts — code, type and normal balance are fixed once created
+// so posted journal lines keep their meaning.
+const editSchema = z.object({
+  name:        z.string().min(2, 'ชื่อต้องมีอย่างน้อย 2 ตัวอักษร'),
+  name_en:     z.string().optional(),
+  description: z.string().optional(),
+  is_active:   z.boolean(),
+})
+type EForm = z.infer<typeof editSchema>
+
 // ── Account Row (recursive tree) ──────────────────────────────
-function AccountRow({ acc, depth, onSelect }: { acc: Account; depth: number; onSelect: (a: Account) => void }) {
+function AccountRow({ acc, depth, onSelect, onEdit }: { acc: Account; depth: number; onSelect: (a: Account) => void; onEdit: (a: Account) => void }) {
   const [open, setOpen] = useState(depth < 1)
   const meta = TYPE_META[acc.account_type]
   const hasChildren = acc.children?.length > 0
@@ -44,47 +55,53 @@ function AccountRow({ acc, depth, onSelect }: { acc: Account; depth: number; onS
 
   return (
     <>
-      <tr onClick={() => onSelect(acc)} style={{ cursor: 'pointer', background: depth === 0 ? '#0A0E18' : 'transparent' }}>
+      <tr onClick={() => onSelect(acc)} style={{ cursor: 'pointer', background: depth === 0 ? 'var(--color-bg-inset)' : 'transparent' }}>
         <td style={{ padding: '10px 16px', paddingLeft: 16 + depth * 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             {hasChildren && (
               <button onClick={e => { e.stopPropagation(); setOpen(o => !o) }}
-                style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 12, width: 16, textAlign: 'center', padding: 0 }}>
+                style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 12, width: 16, textAlign: 'center', padding: 0 }}>
                 {open ? '▾' : '▸'}
               </button>
             )}
             {!hasChildren && <span style={{ width: 16 }} />}
-            <span style={{ fontSize: 13, fontWeight: depth === 0 ? 700 : 400, color: '#DDE3EE' }}>
-              <span style={{ color: '#3A4A60', marginRight: 8, fontFamily: 'monospace' }}>{acc.code}</span>
+            <span style={{ fontSize: 13, fontWeight: depth === 0 ? 700 : 400, color: 'var(--color-text)' }}>
+              <span style={{ color: 'var(--color-dim)', marginRight: 8, fontFamily: 'monospace' }}>{acc.code}</span>
               {acc.name}
             </span>
           </div>
         </td>
         <td style={{ padding: '10px 16px', fontSize: 11 }}>
-          <span style={{ color: meta.color, background: meta.color + '15', border: `1px solid ${meta.color}30`, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', color: meta.color, background: meta.color + '15', border: `1px solid ${meta.color}30`, padding: '2px 8px', borderRadius: 10, fontWeight: 600 }}>
             {meta.icon} {meta.label}
           </span>
         </td>
-        <td style={{ padding: '10px 16px', fontSize: 12, color: '#6A7A90', fontFamily: 'monospace' }}>
+        <td style={{ padding: '10px 16px', fontSize: 12, color: 'var(--color-text-tertiary)', fontFamily: 'monospace' }}>
           {acc.normal_balance === 'debit' ? 'Dr' : 'Cr'}
         </td>
-        <td style={{ padding: '10px 16px', fontSize: 13, textAlign: 'right', fontFamily: 'monospace', fontWeight: balance !== 0 ? 600 : 400, color: balance > 0 ? '#43E97B' : balance < 0 ? '#FF6B6B' : '#3A4A60' }}>
+        <td style={{ padding: '10px 16px', fontSize: 13, textAlign: 'right', fontFamily: 'monospace', fontWeight: balance !== 0 ? 600 : 400, color: balance > 0 ? '#43E97B' : balance < 0 ? '#FF6B6B' : 'var(--color-dim)' }}>
           {balance !== 0 ? balance.toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '—'}
         </td>
         <td style={{ padding: '10px 16px' }}>
-          <span style={{ width: 6, height: 6, borderRadius: '50%', background: acc.is_active ? '#43E97B' : '#FF6B6B', display: 'inline-block' }} />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <span title={acc.is_active ? 'ใช้งาน' : 'ปิดใช้งาน'} style={{ width: 6, height: 6, borderRadius: '50%', background: acc.is_active ? '#43E97B' : '#FF6B6B', display: 'inline-block', flexShrink: 0 }} />
+            <button onClick={e => { e.stopPropagation(); onEdit(acc) }} title="แก้ไขบัญชี" aria-label={`แก้ไขบัญชี ${acc.code}`}
+              style={{ width: 26, height: 26, borderRadius: 7, display: 'grid', placeItems: 'center', background: 'var(--color-bg-inset)', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', padding: 0, flexShrink: 0 }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" /></svg>
+            </button>
+          </div>
         </td>
       </tr>
       {open && hasChildren && acc.children.map(child => (
-        <AccountRow key={child.id} acc={child} depth={depth + 1} onSelect={onSelect} />
+        <AccountRow key={child.id} acc={child} depth={depth + 1} onSelect={onSelect} onEdit={onEdit} />
       ))}
     </>
   )
 }
 
 // ── Main Page ─────────────────────────────────────────────────
-const inp: React.CSSProperties = { width: '100%', background: '#070A0F', border: '1px solid #151C28', borderRadius: 8, padding: '10px 13px', fontSize: 13, color: '#DDE3EE', outline: 'none', boxSizing: 'border-box' }
-const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }
+const inp: React.CSSProperties = { width: '100%', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '10px 13px', fontSize: 13, color: 'var(--color-text)', outline: 'none', boxSizing: 'border-box' }
+const lbl: React.CSSProperties = { display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }
 
 export default function ChartOfAccountsPage() {
   const qc = useQueryClient()
@@ -107,6 +124,22 @@ export default function ChartOfAccountsPage() {
     defaultValues: { account_type: 'asset', normal_balance: 'debit', level: 3 },
   })
 
+  const [editing, setEditing] = useState<Account | null>(null)
+  const editForm = useForm<EForm>({ resolver: zodResolver(editSchema) })
+  const openEdit = (a: Account) => {
+    editForm.reset({ name: a.name, name_en: a.name_en ?? '', description: a.description ?? '', is_active: a.is_active })
+    updateM.reset()
+    setEditing(a)
+  }
+  const updateM = useMutation({
+    mutationFn: (d: EForm) => api.patch<Account>(`/api/v1/accounts/${editing!.id}`, d),
+    onSuccess: ({ data }) => {
+      qc.invalidateQueries({ queryKey: ['accounts'] })
+      if (selected?.id === data.id) setSelected({ ...selected, ...data, children: selected.children })
+      setEditing(null)
+    },
+  })
+
   // Auto-set normal balance based on type
   const watchType = watch('account_type')
 
@@ -126,7 +159,7 @@ export default function ChartOfAccountsPage() {
   })
 
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties  = { background: '#0D1018', border: '1px solid #1E2A3A', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }
+  const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -134,10 +167,10 @@ export default function ChartOfAccountsPage() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>ผังบัญชี</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#4A5A70' }}>Chart of Accounts — มาตรฐานบัญชีไทย</p>
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>Chart of Accounts — มาตรฐานบัญชีไทย</p>
         </div>
         <button onClick={() => setShowCreate(true)}
-          style={{ background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', color: '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
+          style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
           + เพิ่มบัญชี
         </button>
       </div>
@@ -147,8 +180,8 @@ export default function ChartOfAccountsPage() {
         {stats.map(s => {
           const meta = TYPE_META[s.type]
           return (
-            <div key={s.type} style={{ background: '#0D1018', border: `1px solid ${meta.color}20`, borderTop: `2px solid ${meta.color}`, borderRadius: 12, padding: '12px 14px' }}>
-              <p style={{ margin: '0 0 4px', fontSize: 10, color: '#4A5A70', fontWeight: 600 }}>{meta.label}</p>
+            <div key={s.type} style={{ background: 'var(--color-card)', border: `1px solid ${meta.color}20`, borderTop: `2px solid ${meta.color}`, borderRadius: 12, padding: '12px 14px' }}>
+              <p style={{ margin: '0 0 4px', fontSize: 10, color: 'var(--color-muted)', fontWeight: 600 }}>{meta.label}</p>
               <p style={{ margin: 0, fontSize: 22, fontWeight: 800, color: meta.color }}>{s.count}</p>
             </div>
           )
@@ -157,41 +190,44 @@ export default function ChartOfAccountsPage() {
 
       {/* Search */}
       <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  ค้นหารหัสบัญชีหรือชื่อบัญชี..."
-        style={{ background: '#0D1018', border: '1px solid #151C28', borderRadius: 9, padding: '9px 14px', fontSize: 13, color: '#DDE3EE', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
+        style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 9, padding: '9px 14px', fontSize: 13, color: 'var(--color-text)', outline: 'none', width: '100%', boxSizing: 'border-box' }} />
 
       {/* Selected Account Detail */}
       {selected && (
         <div style={{ background: `${TYPE_META[selected.account_type].color}10`, border: `1px solid ${TYPE_META[selected.account_type].color}30`, borderRadius: 12, padding: '16px 20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
           <div>
             <p style={{ margin: '0 0 4px', fontSize: 14, fontWeight: 800 }}>{selected.code} — {selected.name}</p>
-            {selected.name_en && <p style={{ margin: 0, fontSize: 12, color: '#5A6A80' }}>{selected.name_en}</p>}
+            {selected.name_en && <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-tertiary)' }}>{selected.name_en}</p>}
           </div>
           <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }}>
-            <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: '#4A5A70' }}>ประเภท</p><p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: TYPE_META[selected.account_type].color }}>{TYPE_META[selected.account_type].label}</p></div>
-            <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: '#4A5A70' }}>Normal Balance</p><p style={{ margin: 0, fontSize: 12, fontWeight: 700 }}>{selected.normal_balance === 'debit' ? 'Debit (Dr)' : 'Credit (Cr)'}</p></div>
-            <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: '#4A5A70' }}>ยอดคงเหลือ</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#00D4AA' }}>฿ {Number(selected.balance).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</p></div>
+            <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)' }}>ประเภท</p><p style={{ margin: 0, fontSize: 12, fontWeight: 700, color: TYPE_META[selected.account_type].color }}>{TYPE_META[selected.account_type].label}</p></div>
+            <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)' }}>Normal Balance</p><p style={{ margin: 0, fontSize: 12, fontWeight: 700 }}>{selected.normal_balance === 'debit' ? 'Debit (Dr)' : 'Credit (Cr)'}</p></div>
+            <div style={{ textAlign: 'center' }}><p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)' }}>ยอดคงเหลือ</p><p style={{ margin: 0, fontSize: 14, fontWeight: 800, color: '#F2714E' }}>฿ {Number(selected.balance).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</p></div>
           </div>
-          <button onClick={() => setSelected(null)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 16 }}>✕</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => openEdit(selected)} style={{ padding: '7px 14px', borderRadius: 8, border: 'none', background: 'var(--color-bg-inset)', color: 'var(--color-text)', cursor: 'pointer', fontWeight: 700, fontSize: 12 }}>✎ แก้ไข</button>
+            <button onClick={() => setSelected(null)} aria-label="ปิด" style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 16 }}>✕</button>
+          </div>
         </div>
       )}
 
       {/* Table */}
-      <div style={{ background: '#0D1018', border: '1px solid #151C28', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, overflow: 'hidden' }}>
         {isLoading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: '#3A4A60' }}>กำลังโหลดผังบัญชี...</div>
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-dim)' }}>กำลังโหลดผังบัญชี...</div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['รหัส / ชื่อบัญชี', 'ประเภท', 'Normal Balance', 'ยอดคงเหลือ', 'สถานะ'].map(h => (
-                  <th key={h} style={{ padding: '11px 16px', textAlign: h === 'ยอดคงเหลือ' ? 'right' : 'left', fontSize: 10, fontWeight: 700, color: '#3A4A60', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid #151C28' }}>{h}</th>
+                  <th key={h} style={{ padding: '11px 16px', textAlign: h === 'ยอดคงเหลือ' ? 'right' : 'left', fontSize: 10, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {search
-                ? flatSearch(accounts, search).map(a => <AccountRow key={a.id} acc={a} depth={0} onSelect={setSelected} />)
-                : accounts.map(a => <AccountRow key={a.id} acc={a} depth={0} onSelect={setSelected} />)
+                ? flatSearch(accounts, search).map(a => <AccountRow key={a.id} acc={a} depth={0} onSelect={setSelected} onEdit={openEdit} />)
+                : accounts.map(a => <AccountRow key={a.id} acc={a} depth={0} onSelect={setSelected} onEdit={openEdit} />)
               }
             </tbody>
           </table>
@@ -202,9 +238,9 @@ export default function ChartOfAccountsPage() {
       {showCreate && (
         <div style={overlay} onClick={() => setShowCreate(false)}>
           <div style={modal} onClick={e => e.stopPropagation()}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid #151C28' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>เพิ่มบัญชีใหม่</h3>
-              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>
+              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: 12 }}>
@@ -260,9 +296,64 @@ export default function ChartOfAccountsPage() {
               </div>
               {createM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>เกิดข้อผิดพลาด — รหัสบัญชีอาจซ้ำกัน</p></div>}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '10px 20px', borderRadius: 9, border: '1px solid #1E2A3A', background: 'transparent', color: '#6A7A90', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
-                <button type="submit" disabled={createM.isPending} style={{ background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', color: '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer', opacity: createM.isPending ? 0.7 : 1 }}>
+                <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '10px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
+                <button type="submit" disabled={createM.isPending} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer', opacity: createM.isPending ? 0.7 : 1 }}>
                   {createM.isPending ? 'กำลังบันทึก...' : 'สร้างบัญชี'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* EDIT MODAL */}
+      {editing && (
+        <div style={overlay} onClick={() => setEditing(null)}>
+          <div style={modal} onClick={e => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>แก้ไขบัญชี <span style={{ fontFamily: 'monospace', color: 'var(--color-muted)' }}>{editing.code}</span></h3>
+              <button onClick={() => setEditing(null)} aria-label="ปิด" style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
+            </div>
+            <form onSubmit={editForm.handleSubmit(d => updateM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {/* Fixed fields — shown for context, not editable */}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,1fr)', gap: 10, background: 'var(--color-bg-inset)', borderRadius: 10, padding: '10px 14px' }}>
+                {[
+                  ['รหัสบัญชี', editing.code],
+                  ['ประเภท', TYPE_META[editing.account_type].label],
+                  ['Normal Balance', editing.normal_balance === 'debit' ? 'Debit (Dr)' : 'Credit (Cr)'],
+                ].map(([k, v]) => (
+                  <div key={k} style={{ minWidth: 0 }}>
+                    <p style={{ margin: '0 0 2px', fontSize: 10, color: 'var(--color-muted)', whiteSpace: 'nowrap' }}>{k}</p>
+                    <p style={{ margin: 0, fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{v}</p>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin: '-8px 0 0', fontSize: 11, color: 'var(--color-dim)' }}>รหัส ประเภท และ Normal Balance แก้ไขไม่ได้หลังสร้างบัญชี เพื่อไม่ให้รายการที่ลงบัญชีไว้แล้วผิดความหมาย</p>
+              <div>
+                <label style={lbl}>ชื่อบัญชี (ไทย)</label>
+                <input {...editForm.register('name')} style={inp} />
+                {editForm.formState.errors.name && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#FF6B6B' }}>{editForm.formState.errors.name.message}</p>}
+              </div>
+              <div>
+                <label style={lbl}>ชื่อบัญชี (อังกฤษ)</label>
+                <input {...editForm.register('name_en')} placeholder="Cash" style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>หมายเหตุ</label>
+                <textarea {...editForm.register('description')} rows={2} placeholder="คำอธิบายบัญชีเพิ่มเติม (ไม่บังคับ)" style={{ ...inp, resize: 'vertical' }} />
+              </div>
+              <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: 'var(--color-bg-inset)', borderRadius: 10, padding: '12px 14px', cursor: 'pointer' }}>
+                <span>
+                  <span style={{ display: 'block', fontSize: 13, fontWeight: 700 }}>เปิดใช้งานบัญชี</span>
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--color-muted)' }}>ปิดเพื่อเลิกใช้บัญชีนี้โดยยังเก็บประวัติรายการไว้</span>
+                </span>
+                <input type="checkbox" {...editForm.register('is_active')} style={{ width: 18, height: 18, accentColor: '#F2714E', cursor: 'pointer', flexShrink: 0 }} />
+              </label>
+              {updateM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>บันทึกไม่สำเร็จ กรุณาลองใหม่</p></div>}
+              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+                <button type="button" onClick={() => setEditing(null)} style={{ padding: '10px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
+                <button type="submit" disabled={updateM.isPending} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer', opacity: updateM.isPending ? 0.7 : 1 }}>
+                  {updateM.isPending ? 'กำลังบันทึก...' : 'บันทึกการแก้ไข'}
                 </button>
               </div>
             </form>

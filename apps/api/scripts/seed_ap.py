@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from core.database import SessionLocal, engine, Base
 from models.ap import Supplier, Bill, BillItem, BillStatus, ExpenseCategory
-import models.accounting, models.user, models.ar, models.ap
+import models.registry  # noqa: F401 — loads every model so FKs resolve
 
 Base.metadata.create_all(bind=engine)
 db = SessionLocal()

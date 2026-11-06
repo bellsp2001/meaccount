@@ -86,8 +86,11 @@ class Bill(Base, UUIDMixin, TimestampMixin):
     approved_by   = Column(UUIDType(),    ForeignKey("users.id"), nullable=True)
     ai_categorized= Column(Boolean,       default=False)
     ocr_source    = Column(String(500),   nullable=True)
+    # สมุดบันทึก that decides the journal and accounts at GL posting; NULL keeps the default mapping.
+    book_id       = Column(UUIDType(),    ForeignKey("document_books.id"), nullable=True, index=True)
 
     supplier  = relationship("Supplier",         back_populates="bills")
+    book      = relationship("DocumentBook",     foreign_keys=[book_id])
     category  = relationship("ExpenseCategory",  back_populates="bills")
     items     = relationship("BillItem",         back_populates="bill",
                              cascade="all, delete-orphan", lazy="joined",

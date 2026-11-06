@@ -2,8 +2,8 @@ import { clsx } from 'clsx'
 import type { UserRole } from '@/types'
 
 const roleColors: Record<UserRole, string> = {
-  admin:      'bg-[#00D4AA20] text-[#00D4AA] border-[#00D4AA30]',
-  accountant: 'bg-[#4FACFE20] text-[#4FACFE] border-[#4FACFE30]',
+  admin:      'bg-[#F2714E20] text-[#F2714E] border-[#F2714E30]',
+  accountant: 'bg-[#6E8BB720] text-[#6E8BB7] border-[#6E8BB730]',
   cashier:    'bg-[#F093FB20] text-[#F093FB] border-[#F093FB30]',
   inventory:  'bg-[#43E97B20] text-[#43E97B] border-[#43E97B30]',
   manager:    'bg-[#F5A62320] text-[#F5A623] border-[#F5A62330]',

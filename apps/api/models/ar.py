@@ -61,8 +61,11 @@ class Invoice(Base, UUIDMixin, TimestampMixin):
     created_by  = Column(UUIDType(),    ForeignKey("users.id"), nullable=True)
     ocr_source  = Column(String(500),   nullable=True)
     ocr_raw     = Column(Text,          nullable=True)
+    # สมุดบันทึก that decides the journal and accounts at GL posting; NULL keeps the default mapping.
+    book_id     = Column(UUIDType(),    ForeignKey("document_books.id"), nullable=True, index=True)
 
     customer = relationship("Customer", back_populates="invoices")
+    book     = relationship("DocumentBook", foreign_keys=[book_id])
     items    = relationship("InvoiceItem", back_populates="invoice",
                             cascade="all, delete-orphan", lazy="joined",
                             order_by="InvoiceItem.sequence")

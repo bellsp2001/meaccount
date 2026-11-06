@@ -13,13 +13,13 @@ interface Movement {
 const TYPE_META: Record<string, { label: string; color: string; icon: string }> = {
   receive:    { label: 'รับเข้า',       color: '#43E97B', icon: '⬇' },
   issue:      { label: 'จ่ายออก',       color: '#F093FB', icon: '⬆' },
-  adjust_in:  { label: 'ปรับปรุงเพิ่ม', color: '#4FACFE', icon: '＋' },
+  adjust_in:  { label: 'ปรับปรุงเพิ่ม', color: 'var(--color-accent-light)', icon: '＋' },
   adjust_out: { label: 'ปรับปรุงลด',   color: '#FF6B6B', icon: '－' },
   transfer:   { label: 'โอนย้าย',       color: '#F5A623', icon: '⇄' },
 }
 
-const inp: React.CSSProperties = { width: '100%', background: '#070A0F', border: '1px solid #151C28', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: '#DDE3EE', outline: 'none', boxSizing: 'border-box' }
-const lbl: React.CSSProperties = { display: 'block', fontSize: 10, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }
+const inp: React.CSSProperties = { width: '100%', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: 'var(--color-text)', outline: 'none', boxSizing: 'border-box' }
+const lbl: React.CSSProperties = { display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 6 }
 
 export default function StockMovementsPage() {
   const qc = useQueryClient()
@@ -82,19 +82,19 @@ export default function StockMovementsPage() {
   const isError   = receiveM.isError || issueM.isError || adjustM.isError
 
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties  = { background: '#0D1018', border: '1px solid #1E2A3A', borderRadius: 16, width: '100%', maxWidth: 480 }
+  const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 480 }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>รับ / จ่ายสินค้า</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#4A5A70' }}>Stock Movements — ทั้งหมด {movements.length} รายการ</p>
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>Stock Movements — ทั้งหมด {movements.length} รายการ</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => { setTab('receive'); setShowForm(true) }} style={{ background: '#43E97B15', border: '1px solid #43E97B40', color: '#43E97B', fontWeight: 700, fontSize: 12, borderRadius: 9, padding: '9px 16px', cursor: 'pointer' }}>⬇ รับสินค้า</button>
           <button onClick={() => { setTab('issue'); setShowForm(true) }} style={{ background: '#F093FB15', border: '1px solid #F093FB40', color: '#F093FB', fontWeight: 700, fontSize: 12, borderRadius: 9, padding: '9px 16px', cursor: 'pointer' }}>⬆ จ่ายสินค้า</button>
-          <button onClick={() => { setTab('adjust'); setShowForm(true) }} style={{ background: '#4FACFE15', border: '1px solid #4FACFE40', color: '#4FACFE', fontWeight: 700, fontSize: 12, borderRadius: 9, padding: '9px 16px', cursor: 'pointer' }}>⚙ ปรับปรุง</button>
+          <button onClick={() => { setTab('adjust'); setShowForm(true) }} style={{ background: '#FFB59E15', border: '1px solid #FFB59E40', color: 'var(--color-accent-light)', fontWeight: 700, fontSize: 12, borderRadius: 9, padding: '9px 16px', cursor: 'pointer' }}>⚙ ปรับปรุง</button>
         </div>
       </div>
 
@@ -102,22 +102,22 @@ export default function StockMovementsPage() {
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {['all', ...Object.keys(TYPE_META)].map(t => (
           <button key={t} onClick={() => setFilterType(t)}
-            style={{ background: filterType === t ? (t === 'all' ? '#00D4AA' : TYPE_META[t].color) : '#0D1018', color: filterType === t ? '#07090E' : '#5A6A80', border: `1px solid ${filterType === t ? 'transparent' : '#151C28'}`, borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
+            style={{ background: filterType === t ? (t === 'all' ? '#F2714E' : TYPE_META[t].color) : 'var(--color-card)', color: filterType === t ? 'var(--color-bg)' : 'var(--color-text-tertiary)', border: `1px solid ${filterType === t ? 'transparent' : 'var(--color-border)'}`, borderRadius: 20, padding: '4px 12px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}>
             {t === 'all' ? 'ทั้งหมด' : TYPE_META[t].label}
           </button>
         ))}
       </div>
 
       {/* Table */}
-      <div style={{ background: '#0D1018', border: '1px solid #151C28', borderRadius: 14, overflow: 'hidden' }}>
-        {isLoading ? <div style={{ padding: 48, textAlign: 'center', color: '#3A4A60' }}>กำลังโหลด...</div>
-        : filtered.length === 0 ? <div style={{ padding: 52, textAlign: 'center', color: '#3A4A60', fontSize: 13 }}>ยังไม่มีรายการเคลื่อนไหว</div>
+      <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, overflow: 'hidden' }}>
+        {isLoading ? <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-dim)' }}>กำลังโหลด...</div>
+        : filtered.length === 0 ? <div style={{ padding: 52, textAlign: 'center', color: 'var(--color-dim)', fontSize: 13 }}>ยังไม่มีรายการเคลื่อนไหว</div>
         : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
                 {['เลขที่', 'ประเภท', 'สินค้า', 'วันที่', 'จำนวน', 'ต้นทุน', 'มูลค่ารวม', 'GL', ''].map(h => (
-                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: '#3A4A60', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid #151C28' }}>{h}</th>
+                  <th key={h} style={{ padding: '10px 12px', textAlign: 'left', fontSize: 9, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', letterSpacing: '0.08em', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -127,19 +127,19 @@ export default function StockMovementsPage() {
                 const product = products.find(p => p.id === m.product_id)
                 return (
                   <tr key={m.id}>
-                    <td style={{ padding: '11px 12px', borderBottom: '1px solid #0F1520', fontFamily: 'monospace', fontSize: 11, color: '#4FACFE' }}>{m.number}</td>
-                    <td style={{ padding: '11px 12px', borderBottom: '1px solid #0F1520' }}>
+                    <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontFamily: 'monospace', fontSize: 11, color: 'var(--color-accent-light)' }}>{m.number}</td>
+                    <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                       <span style={{ fontSize: 10, fontWeight: 700, color: meta.color, background: meta.color + '18', border: `1px solid ${meta.color}35`, padding: '2px 8px', borderRadius: 10 }}>{meta.icon} {meta.label}</span>
                     </td>
-                    <td style={{ padding: '11px 12px', borderBottom: '1px solid #0F1520', fontSize: 12 }}>{product?.name || '—'}</td>
-                    <td style={{ padding: '11px 12px', borderBottom: '1px solid #0F1520', fontSize: 11, color: '#6A7A90' }}>{new Date(m.date).toLocaleDateString('th-TH')}</td>
-                    <td style={{ padding: '11px 12px', borderBottom: '1px solid #0F1520', fontSize: 12, fontFamily: 'monospace', fontWeight: 600 }}>{Number(m.quantity).toLocaleString('th-TH')}</td>
-                    <td style={{ padding: '11px 12px', borderBottom: '1px solid #0F1520', fontSize: 11, fontFamily: 'monospace', color: '#8A9BB0' }}>{m.unit_cost ? `฿${Number(m.unit_cost).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '—'}</td>
-                    <td style={{ padding: '11px 12px', borderBottom: '1px solid #0F1520', fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: meta.color }}>{m.total_cost ? `฿${Number(m.total_cost).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '—'}</td>
-                    <td style={{ padding: '11px 12px', borderBottom: '1px solid #0F1520' }}>
-                      {m.gl_posted ? <span style={{ fontSize: 10, color: '#43E97B' }}>✓</span> : <span style={{ fontSize: 10, color: '#3A4A60' }}>—</span>}
+                    <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12 }}>{product?.name || '—'}</td>
+                    <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 11, color: 'var(--color-text-tertiary)' }}>{new Date(m.date).toLocaleDateString('th-TH')}</td>
+                    <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, fontFamily: 'monospace', fontWeight: 600 }}>{Number(m.quantity).toLocaleString('th-TH')}</td>
+                    <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 11, fontFamily: 'monospace', color: 'var(--color-text-secondary)' }}>{m.unit_cost ? `฿${Number(m.unit_cost).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '—'}</td>
+                    <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, fontFamily: 'monospace', fontWeight: 700, color: meta.color }}>{m.total_cost ? `฿${Number(m.total_cost).toLocaleString('th-TH', { minimumFractionDigits: 2 })}` : '—'}</td>
+                    <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)' }}>
+                      {m.gl_posted ? <span style={{ fontSize: 10, color: '#43E97B' }}>✓</span> : <span style={{ fontSize: 10, color: 'var(--color-dim)' }}>—</span>}
                     </td>
-                    <td style={{ padding: '11px 12px', borderBottom: '1px solid #0F1520' }}>
+                    <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                       {!m.gl_posted && ['issue', 'adjust_out'].includes(m.movement_type) && (
                         <button onClick={() => postGLM.mutate(m.id)} style={{ fontSize: 10, padding: '4px 8px', borderRadius: 6, border: '1px solid #F5A62340', background: '#F5A62312', color: '#F5A623', cursor: 'pointer', fontWeight: 700 }}>Post GL</button>
                       )}
@@ -156,11 +156,11 @@ export default function StockMovementsPage() {
       {showForm && (
         <div style={overlay} onClick={() => setShowForm(false)}>
           <div style={modal} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #151C28', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>
                 {tab === 'receive' ? '⬇ รับสินค้าเข้าคลัง' : tab === 'issue' ? '⬆ จ่ายสินค้าออก' : '⚙ ปรับปรุงสต็อก'}
               </h3>
-              <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>
+              <button onClick={() => setShowForm(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
@@ -203,9 +203,9 @@ export default function StockMovementsPage() {
               {isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>เกิดข้อผิดพลาด — ตรวจสอบจำนวนสต็อกคงเหลือ</p></div>}
 
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', paddingTop: 4 }}>
-                <button onClick={() => setShowForm(false)} style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid #1E2A3A', background: 'transparent', color: '#6A7A90', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
+                <button onClick={() => setShowForm(false)} style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
                 <button onClick={handleSubmit} disabled={isPending || !form.product_id || !form.warehouse_id || !form.quantity}
-                  style={{ background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', color: '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '9px 22px', cursor: 'pointer', opacity: isPending ? 0.7 : 1 }}>
+                  style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '9px 22px', cursor: 'pointer', opacity: isPending ? 0.7 : 1 }}>
                   {isPending ? 'กำลังบันทึก...' : 'ยืนยัน'}
                 </button>
               </div>

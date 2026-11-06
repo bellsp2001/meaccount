@@ -5,7 +5,7 @@ from datetime import date, timedelta
 from decimal import Decimal
 from core.database import SessionLocal, engine, Base
 from models.inventory import Warehouse, ProductCategory, Product, CostMethod
-import models.user, models.accounting, models.ar, models.ap, models.inventory
+import models.registry  # noqa: F401 — loads every model so FKs resolve
 from services.inventory import receive_stock
 from schemas.inventory import StockReceiveCreate
 

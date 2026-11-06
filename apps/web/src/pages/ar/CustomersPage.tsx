@@ -26,8 +26,8 @@ const schema = z.object({
 })
 type CForm = z.infer<typeof schema>
 
-const inp: React.CSSProperties = { width:'100%', background:'#070A0F', border:'1px solid #151C28', borderRadius:8, padding:'9px 12px', fontSize:12, color:'#DDE3EE', outline:'none', boxSizing:'border-box' }
-const lbl: React.CSSProperties = { display:'block', fontSize:10, fontWeight:700, color:'#6A7A90', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:6 }
+const inp: React.CSSProperties = { width:'100%', background:'var(--color-bg-inset)', border:'1px solid var(--color-border)', borderRadius:8, padding:'9px 12px', fontSize:12, color:'var(--color-text)', outline:'none', boxSizing:'border-box' }
+const lbl: React.CSSProperties = { display:'block', fontSize:10, fontWeight:700, color:'var(--color-text-tertiary)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:6 }
 
 export default function CustomersPage() {
   const qc = useQueryClient()
@@ -57,16 +57,16 @@ export default function CustomersPage() {
   )
 
   const overlay: React.CSSProperties = { position:'fixed', inset:0, background:'rgba(0,0,0,0.65)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }
-  const modal: React.CSSProperties  = { background:'#0D1018', border:'1px solid #1E2A3A', borderRadius:16, width:'100%', maxWidth:560, maxHeight:'90vh', overflowY:'auto' }
+  const modal: React.CSSProperties  = { background:'var(--color-card)', border:'1px solid var(--color-border-strong)', borderRadius:16, width:'100%', maxWidth:560, maxHeight:'90vh', overflowY:'auto' }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12 }}>
         <div>
           <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>รายชื่อลูกค้า</h2>
-          <p style={{ margin:'3px 0 0', fontSize:12, color:'#4A5A70' }}>ทั้งหมด {customers.length} ราย</p>
+          <p style={{ margin:'3px 0 0', fontSize:12, color:'var(--color-muted)' }}>ทั้งหมด {customers.length} ราย</p>
         </div>
-        <button onClick={() => setShowCreate(true)} style={{ background:'linear-gradient(135deg,#00D4AA,#4FACFE)', color:'#07090E', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 20px', cursor:'pointer' }}>
+        <button onClick={() => setShowCreate(true)} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 20px', cursor:'pointer' }}>
           + เพิ่มลูกค้าใหม่
         </button>
       </div>
@@ -74,27 +74,27 @@ export default function CustomersPage() {
       {/* Stats */}
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(160px,1fr))', gap:12 }}>
         {[
-          { label:'ลูกค้าทั้งหมด', value: customers.length, color:'#4FACFE' },
+          { label:'ลูกค้าทั้งหมด', value: customers.length, color: 'var(--color-accent-light)' },
           { label:'Active', value: customers.filter(c=>c.is_active).length, color:'#43E97B' },
           { label:'เครดิตเฉลี่ย', value: customers.length ? Math.round(customers.reduce((s,c)=>s+c.credit_days,0)/customers.length) + ' วัน' : '-', color:'#F5A623' },
         ].map(s => (
-          <div key={s.label} style={{ background:'#0D1018', border:`1px solid ${s.color}20`, borderTop:`2px solid ${s.color}`, borderRadius:12, padding:'14px 16px' }}>
-            <p style={{ margin:'0 0 4px', fontSize:10, color:'#4A5A70' }}>{s.label}</p>
+          <div key={s.label} style={{ background:'var(--color-card)', border:`1px solid ${s.color}20`, borderTop:`2px solid ${s.color}`, borderRadius:12, padding:'14px 16px' }}>
+            <p style={{ margin:'0 0 4px', fontSize:10, color:'var(--color-muted)' }}>{s.label}</p>
             <p style={{ margin:0, fontSize:22, fontWeight:800, color:s.color }}>{s.value}</p>
           </div>
         ))}
       </div>
 
       <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  ค้นหาชื่อ, รหัส, เลขผู้เสียภาษี..."
-        style={{ background:'#0D1018', border:'1px solid #151C28', borderRadius:9, padding:'9px 14px', fontSize:13, color:'#DDE3EE', outline:'none', width:'100%', boxSizing:'border-box' }} />
+        style={{ background:'var(--color-card)', border:'1px solid var(--color-border)', borderRadius:9, padding:'9px 14px', fontSize:13, color:'var(--color-text)', outline:'none', width:'100%', boxSizing:'border-box' }} />
 
       {/* Selected customer detail */}
       {selected && (
-        <div style={{ background:'#4FACFE10', border:'1px solid #4FACFE30', borderRadius:12, padding:'16px 20px' }}>
+        <div style={{ background:'#FFB59E10', border:'1px solid #FFB59E30', borderRadius:12, padding:'16px 20px' }}>
           <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:12 }}>
             <div>
               <p style={{ margin:'0 0 4px', fontSize:15, fontWeight:800 }}>{selected.name}</p>
-              <p style={{ margin:0, fontSize:12, color:'#5A6A80' }}>รหัส: {selected.code} {selected.tax_id ? `· เลขภาษี: ${selected.tax_id}` : ''}</p>
+              <p style={{ margin:0, fontSize:12, color:'var(--color-text-tertiary)' }}>รหัส: {selected.code} {selected.tax_id ? `· เลขภาษี: ${selected.tax_id}` : ''}</p>
             </div>
             <div style={{ display:'flex', gap:16, flexWrap:'wrap' }}>
               {[
@@ -103,45 +103,45 @@ export default function CustomersPage() {
                 { l:'สถานะ', v: selected.is_active ? 'Active' : 'Inactive', color: selected.is_active ? '#43E97B' : '#FF6B6B' },
               ].map(item => (
                 <div key={item.l} style={{ textAlign:'center' }}>
-                  <p style={{ margin:'0 0 2px', fontSize:10, color:'#4A5A70' }}>{item.l}</p>
-                  <p style={{ margin:0, fontSize:13, fontWeight:700, color: item.color || '#DDE3EE' }}>{item.v}</p>
+                  <p style={{ margin:'0 0 2px', fontSize:10, color:'var(--color-muted)' }}>{item.l}</p>
+                  <p style={{ margin:0, fontSize:13, fontWeight:700, color: item.color || 'var(--color-text)' }}>{item.v}</p>
                 </div>
               ))}
             </div>
-            <button onClick={()=>setSelected(null)} style={{ background:'none', border:'none', color:'#4A5A70', cursor:'pointer', fontSize:16 }}>✕</button>
+            <button onClick={()=>setSelected(null)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:16 }}>✕</button>
           </div>
-          {selected.address && <p style={{ margin:'12px 0 0', fontSize:12, color:'#5A6A80' }}>📍 {selected.address}</p>}
+          {selected.address && <p style={{ margin:'12px 0 0', fontSize:12, color:'var(--color-text-tertiary)' }}>📍 {selected.address}</p>}
         </div>
       )}
 
       {/* Table */}
-      <div style={{ background:'#0D1018', border:'1px solid #151C28', borderRadius:14, overflow:'hidden' }}>
-        {isLoading ? <div style={{ padding:48, textAlign:'center', color:'#3A4A60' }}>กำลังโหลด...</div>
-        : filtered.length === 0 ? <div style={{ padding:52, textAlign:'center', color:'#3A4A60' }}>ไม่พบลูกค้า</div>
+      <div style={{ background:'var(--color-card)', border:'1px solid var(--color-border)', borderRadius:14, overflow:'hidden' }}>
+        {isLoading ? <div style={{ padding:48, textAlign:'center', color:'var(--color-dim)' }}>กำลังโหลด...</div>
+        : filtered.length === 0 ? <div style={{ padding:52, textAlign:'center', color:'var(--color-dim)' }}>ไม่พบลูกค้า</div>
         : (
           <table style={{ width:'100%', borderCollapse:'collapse' }}>
             <thead>
               <tr>
                 {['รหัส','ชื่อลูกค้า','เลขผู้เสียภาษี','ติดต่อ','เครดิต','สถานะ'].map(h=>(
-                  <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontSize:9, fontWeight:700, color:'#3A4A60', textTransform:'uppercase', letterSpacing:'0.1em', borderBottom:'1px solid #151C28' }}>{h}</th>
+                  <th key={h} style={{ padding:'10px 14px', textAlign:'left', fontSize:9, fontWeight:700, color:'var(--color-dim)', textTransform:'uppercase', letterSpacing:'0.1em', borderBottom:'1px solid var(--color-border)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {filtered.map(c => (
                 <tr key={c.id} onClick={()=>setSelected(c)} style={{ cursor:'pointer' }}>
-                  <td style={{ padding:'11px 14px', borderBottom:'1px solid #0F1520', fontFamily:'monospace', fontSize:12, color:'#4FACFE' }}>{c.code}</td>
-                  <td style={{ padding:'11px 14px', borderBottom:'1px solid #0F1520' }}>
+                  <td style={{ padding:'11px 14px', borderBottom:'1px solid var(--color-border-subtle)', fontFamily:'monospace', fontSize:12, color: 'var(--color-accent-light)' }}>{c.code}</td>
+                  <td style={{ padding:'11px 14px', borderBottom:'1px solid var(--color-border-subtle)' }}>
                     <p style={{ margin:0, fontSize:13, fontWeight:600 }}>{c.name}</p>
-                    {c.name_en && <p style={{ margin:0, fontSize:11, color:'#4A5A70' }}>{c.name_en}</p>}
+                    {c.name_en && <p style={{ margin:0, fontSize:11, color:'var(--color-muted)' }}>{c.name_en}</p>}
                   </td>
-                  <td style={{ padding:'11px 14px', borderBottom:'1px solid #0F1520', fontSize:12, color:'#6A7A90', fontFamily:'monospace' }}>{c.tax_id || '—'}</td>
-                  <td style={{ padding:'11px 14px', borderBottom:'1px solid #0F1520', fontSize:11, color:'#6A7A90' }}>
+                  <td style={{ padding:'11px 14px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:12, color:'var(--color-text-tertiary)', fontFamily:'monospace' }}>{c.tax_id || '—'}</td>
+                  <td style={{ padding:'11px 14px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:11, color:'var(--color-text-tertiary)' }}>
                     {c.contact_name && <p style={{ margin:0 }}>{c.contact_name}</p>}
                     {c.phone && <p style={{ margin:0 }}>{c.phone}</p>}
                   </td>
-                  <td style={{ padding:'11px 14px', borderBottom:'1px solid #0F1520', fontSize:12, color:'#F5A623' }}>{c.credit_days} วัน</td>
-                  <td style={{ padding:'11px 14px', borderBottom:'1px solid #0F1520' }}>
+                  <td style={{ padding:'11px 14px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:12, color:'#F5A623' }}>{c.credit_days} วัน</td>
+                  <td style={{ padding:'11px 14px', borderBottom:'1px solid var(--color-border-subtle)' }}>
                     <span style={{ width:6, height:6, borderRadius:'50%', background:c.is_active?'#43E97B':'#FF6B6B', display:'inline-block' }} />
                   </td>
                 </tr>
@@ -155,9 +155,9 @@ export default function CustomersPage() {
       {showCreate && (
         <div style={overlay} onClick={()=>setShowCreate(false)}>
           <div style={modal} onClick={e=>e.stopPropagation()}>
-            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'18px 24px', borderBottom:'1px solid #151C28' }}>
+            <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', padding:'18px 24px', borderBottom:'1px solid var(--color-border)' }}>
               <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>เพิ่มลูกค้าใหม่</h3>
-              <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', color:'#4A5A70', cursor:'pointer', fontSize:18 }}>✕</button>
+              <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
             </div>
             <form onSubmit={handleSubmit(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:14 }}>
               <div style={{ display:'grid', gridTemplateColumns:'1fr 2fr', gap:12 }}>
@@ -181,8 +181,8 @@ export default function CustomersPage() {
               </div>
               {createM.isError && <div style={{ background:'#FF6B6B12', border:'1px solid #FF6B6B35', borderRadius:8, padding:'10px 14px' }}><p style={{ margin:0, fontSize:12, color:'#FF6B6B' }}>เกิดข้อผิดพลาด — รหัสลูกค้าอาจซ้ำ</p></div>}
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end', paddingTop:4 }}>
-                <button type="button" onClick={()=>setShowCreate(false)} style={{ padding:'9px 20px', borderRadius:9, border:'1px solid #1E2A3A', background:'transparent', color:'#6A7A90', cursor:'pointer', fontWeight:600, fontSize:13 }}>ยกเลิก</button>
-                <button type="submit" disabled={createM.isPending} style={{ background:'linear-gradient(135deg,#00D4AA,#4FACFE)', color:'#07090E', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'9px 20px', cursor:'pointer', opacity:createM.isPending?0.7:1 }}>{createM.isPending?'กำลังบันทึก...':'บันทึก'}</button>
+                <button type="button" onClick={()=>setShowCreate(false)} style={{ padding:'9px 20px', borderRadius:9, border:'1px solid var(--color-border-strong)', background:'transparent', color:'var(--color-text-tertiary)', cursor:'pointer', fontWeight:600, fontSize:13 }}>ยกเลิก</button>
+                <button type="submit" disabled={createM.isPending} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'9px 20px', cursor:'pointer', opacity:createM.isPending?0.7:1 }}>{createM.isPending?'กำลังบันทึก...':'บันทึก'}</button>
               </div>
             </form>
           </div>

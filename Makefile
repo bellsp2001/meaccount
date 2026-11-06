@@ -125,3 +125,21 @@ test-readiness:
 
 loadtest:
 	cd apps/api && locust -f loadtest/locustfile.py --host $(HOST)
+
+test-pos:
+	cd apps/api && pytest tests/test_pos.py -v
+
+seed-pos:
+	cd apps/api && python scripts/seed_pos.py
+
+seed-leave:
+	cd apps/api && python scripts/seed_leave.py
+
+test-leave:
+	cd apps/api && pytest tests/test_leave.py -v
+
+seed-doctemplate:
+	cd apps/api && python scripts/seed_doctemplate.py
+
+test-doctemplate:
+	cd apps/api && pytest tests/test_doctemplate.py -v

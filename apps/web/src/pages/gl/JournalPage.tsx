@@ -1,13 +1,18 @@
 import { useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useForm, useFieldArray } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
+import { JOURNAL_TYPES, JOURNAL_TYPE_META, isJournalType, type JournalType } from '@/config/journals'
+import { JournalTypeBadge as TypeBadge } from '@/components/ui/JournalTypeBadge'
 
 interface Account { id: string; code: string; name: string; account_type: string; normal_balance: string }
 interface JEntry  { id: string; account_id: string; account_code?: string; account_name?: string; debit: number; credit: number; description?: string }
-interface Journal { id: string; number: string; date: string; description: string; status: 'draft'|'posted'|'reversed'; entries: JEntry[]; total_debit?: number; total_credit?: number; ai_suggested?: boolean }
+interface Journal { id: string; number: string; date: string; description: string; journal_type: JournalType; status: 'draft'|'posted'|'reversed'; entries: JEntry[]; total_debit?: number; total_credit?: number; ai_suggested?: boolean }
+
+const TYPE_META = JOURNAL_TYPE_META
 
 const entrySchema = z.object({
   account_id:  z.string().min(1, 'เลือกบัญชี'),
@@ -16,6 +21,7 @@ const entrySchema = z.object({
   description: z.string().optional(),
 })
 const journalSchema = z.object({
+  journal_type: z.enum(['general','sales','purchase','receipt','payment']),
   date:        z.string().min(1, 'ระบุวันที่'),
   description: z.string().min(1, 'ระบุคำอธิบาย'),
   reference:   z.string().optional(),
@@ -34,7 +40,7 @@ const STATUS_META: Record<string,{label:string;color:string}> = {
   reversed: { label: 'Reversed', color: '#FF6B6B' },
 }
 
-const inp: React.CSSProperties = { background: '#070A0F', border: '1px solid #151C28', borderRadius: 8, padding: '8px 10px', fontSize: 12, color: '#DDE3EE', outline: 'none', width: '100%', boxSizing: 'border-box' }
+const inp: React.CSSProperties = { background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '8px 10px', fontSize: 12, color: 'var(--color-text)', outline: 'none', width: '100%', boxSizing: 'border-box' }
 
 export default function JournalPage() {
   const qc = useQueryClient()
@@ -46,9 +52,15 @@ export default function JournalPage() {
   const [aiResult, setAiResult] = useState<{explanation:string;confidence:number}|null>(null)
   const [viewJournal, setViewJournal] = useState<Journal|null>(null)
 
+  // The selected book lives in the URL (?type=sales) so it survives reloads and can be linked to.
+  const [params, setParams] = useSearchParams()
+  const rawType = params.get('type')
+  const activeType: JournalType | null = isJournalType(rawType) ? rawType : null
+  const selectType = (t: JournalType | null) => setParams(t ? { type: t } : {}, { replace: true })
+
   const { data: journals = [], isLoading } = useQuery<Journal[]>({
-    queryKey: ['journals'],
-    queryFn: async () => (await api.get('/api/v1/journals/')).data,
+    queryKey: ['journals', activeType ?? 'all'],
+    queryFn: async () => (await api.get('/api/v1/journals/', { params: activeType ? { journal_type: activeType } : {} })).data,
   })
   const { data: accounts = [] } = useQuery<Account[]>({
     queryKey: ['accounts'],
@@ -67,6 +79,7 @@ export default function JournalPage() {
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<JForm>({
     resolver: zodResolver(journalSchema),
     defaultValues: {
+      journal_type: 'general',
       date: new Date().toISOString().split('T')[0],
       entries: [
         { account_id: '', debit: 0, credit: 0, description: '' },
@@ -97,6 +110,7 @@ export default function JournalPage() {
       if (newEntries.length >= 2) {
         setValue('entries', newEntries)
         setValue('description', aiDesc)
+        setValue('journal_type', activeType ?? 'general')
         setAiMode(false)
         setShowCreate(true)
       }
@@ -105,43 +119,53 @@ export default function JournalPage() {
   }
 
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties  = { background: '#0D1018', border: '1px solid #1E2A3A', borderRadius: 16, width: '100%', maxWidth: 780, maxHeight: '92vh', overflowY: 'auto' }
+  const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 780, maxHeight: '92vh', overflowY: 'auto' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
-          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>สมุดรายวัน</h2>
-          <p style={{ margin: '3px 0 0', fontSize: 12, color: '#4A5A70' }}>General Journal — Double-Entry Bookkeeping</p>
+          <h2 style={{ margin: 0, fontSize: 18, fontWeight: 800 }}>{activeType ? TYPE_META[activeType].full : 'สมุดรายวัน'}</h2>
+          <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>{activeType ? TYPE_META[activeType].en : 'ทุกเล่ม'} — Double-Entry Bookkeeping</p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button onClick={() => setAiMode(true)}
-            style={{ background: '#00D4AA15', border: '1px solid #00D4AA40', color: '#00D4AA', fontWeight: 700, fontSize: 12, borderRadius: 9, padding: '9px 16px', cursor: 'pointer' }}>
+            style={{ background: '#F2714E15', border: '1px solid #F2714E40', color: '#F2714E', fontWeight: 700, fontSize: 12, borderRadius: 9, padding: '9px 16px', cursor: 'pointer' }}>
             🤖 AI แนะนำการลงบัญชี
           </button>
-          <button onClick={() => { setShowCreate(true); setAiResult(null) }}
-            style={{ background: 'linear-gradient(135deg,#00D4AA,#4FACFE)', color: '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
+          <button onClick={() => { setValue('journal_type', activeType ?? 'general'); setShowCreate(true); setAiResult(null) }}
+            style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
             + บันทึกรายการใหม่
           </button>
         </div>
       </div>
 
+      {/* Book tabs — scrolls sideways on narrow screens instead of wrapping */}
+      <div style={{ overflowX: 'auto', margin: '-4px -4px 0', padding: 4 }}>
+        <div className="seg" role="tablist" aria-label="ประเภทสมุดรายวัน" style={{ whiteSpace: 'nowrap' }}>
+          <button role="tab" aria-selected={!activeType} data-active={!activeType} onClick={() => selectType(null)}>ทั้งหมด</button>
+          {JOURNAL_TYPES.map(t => (
+            <button key={t.key} role="tab" aria-selected={activeType === t.key} data-active={activeType === t.key} onClick={() => selectType(t.key)}>{t.label}</button>
+          ))}
+        </div>
+      </div>
+
       {/* Journal list */}
-      <div style={{ background: '#0D1018', border: '1px solid #151C28', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, overflow: 'hidden' }}>
         {isLoading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: '#3A4A60' }}>กำลังโหลด...</div>
+          <div style={{ padding: 48, textAlign: 'center', color: 'var(--color-dim)' }}>กำลังโหลด...</div>
         ) : journals.length === 0 ? (
           <div style={{ padding: 56, textAlign: 'center' }}>
             <p style={{ fontSize: 32, marginBottom: 12 }}>📒</p>
-            <p style={{ color: '#3A4A60', fontSize: 13 }}>ยังไม่มีรายการสมุดรายวัน</p>
+            <p style={{ color: 'var(--color-dim)', fontSize: 13 }}>{activeType ? `ยังไม่มีรายการใน${TYPE_META[activeType].full}` : 'ยังไม่มีรายการสมุดรายวัน'}</p>
           </div>
         ) : (
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr>
-                {['เลขที่','วันที่','คำอธิบาย','Dr','Cr','สถานะ','Actions'].map(h => (
-                  <th key={h} style={{ padding: '11px 14px', textAlign: ['Dr','Cr'].includes(h) ? 'right' : 'left', fontSize: 10, fontWeight: 700, color: '#3A4A60', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid #151C28' }}>{h}</th>
+                {['เลขที่','วันที่','ประเภท','คำอธิบาย','Dr','Cr','สถานะ','Actions'].map(h => (
+                  <th key={h} style={{ padding: '11px 14px', textAlign: ['Dr','Cr'].includes(h) ? 'right' : 'left', fontSize: 10, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', letterSpacing: '0.1em', borderBottom: '1px solid var(--color-border)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -150,18 +174,19 @@ export default function JournalPage() {
                 const sm = STATUS_META[j.status]
                 return (
                   <tr key={j.id} onClick={() => setViewJournal(j)} style={{ cursor: 'pointer' }}>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid #0F1520', fontFamily: 'monospace', fontSize: 12, color: '#4FACFE' }}>{j.number}</td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid #0F1520', fontSize: 12, color: '#8A9BB0' }}>{new Date(j.date).toLocaleDateString('th-TH')}</td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid #0F1520', fontSize: 13 }}>
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontFamily: 'monospace', fontSize: 12, color: 'var(--color-accent-light)' }}>{j.number}</td>
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, color: 'var(--color-text-secondary)' }}>{new Date(j.date).toLocaleDateString('th-TH')}</td>
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}><TypeBadge type={j.journal_type} /></td>
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 13 }}>
                       <span>{j.description}</span>
-                      {j.ai_suggested && <span style={{ marginLeft: 8, fontSize: 9, background: '#00D4AA15', color: '#00D4AA', border: '1px solid #00D4AA30', padding: '1px 6px', borderRadius: 8 }}>AI</span>}
+                      {j.ai_suggested && <span style={{ marginLeft: 8, fontSize: 9, background: '#F2714E15', color: '#F2714E', border: '1px solid #F2714E30', padding: '1px 6px', borderRadius: 8 }}>AI</span>}
                     </td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid #0F1520', textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: '#43E97B' }}>{Number(j.total_debit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid #0F1520', textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: '#F093FB' }}>{Number(j.total_credit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid #0F1520' }}>
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: '#43E97B' }}>{Number(j.total_debit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', textAlign: 'right', fontFamily: 'monospace', fontSize: 12, color: '#F093FB' }}>{Number(j.total_credit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}>
                       <span style={{ fontSize: 10, fontWeight: 700, color: sm.color, background: sm.color+'18', border: `1px solid ${sm.color}35`, padding: '2px 9px', borderRadius: 10 }}>{sm.label}</span>
                     </td>
-                    <td style={{ padding: '12px 14px', borderBottom: '1px solid #0F1520' }} onClick={e => e.stopPropagation()}>
+                    <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }} onClick={e => e.stopPropagation()}>
                       {j.status === 'draft' && (
                         <button onClick={() => postM.mutate(j.id)} disabled={postM.isPending}
                           style={{ fontSize: 11, padding: '5px 12px', borderRadius: 7, border: '1px solid #43E97B40', background: '#43E97B12', color: '#43E97B', cursor: 'pointer', fontWeight: 700 }}>
@@ -181,24 +206,24 @@ export default function JournalPage() {
       {aiMode && (
         <div style={overlay} onClick={() => setAiMode(false)}>
           <div style={{ ...modal, maxWidth: 500 }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #151C28', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span style={{ fontSize: 20 }}>🤖</span>
                 <div>
                   <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>AI แนะนำการลงบัญชี</h3>
-                  <p style={{ margin: 0, fontSize: 11, color: '#4A5A70' }}>บอกรายการ AI จะเลือกบัญชีให้อัตโนมัติ</p>
+                  <p style={{ margin: 0, fontSize: 11, color: 'var(--color-muted)' }}>บอกรายการ AI จะเลือกบัญชีให้อัตโนมัติ</p>
                 </div>
               </div>
-              <button onClick={() => setAiMode(false)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>
+              <button onClick={() => setAiMode(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>อธิบายรายการ</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>อธิบายรายการ</label>
                 <input value={aiDesc} onChange={e => setAiDesc(e.target.value)} placeholder="เช่น: ซื้อกระดาษ A4 สำนักงาน, รับค่าบริการจากลูกค้า ABC..."
                   style={{ ...inp, padding: '11px 14px' }} />
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>จำนวนเงิน (บาท)</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>จำนวนเงิน (บาท)</label>
                 <input type="number" value={aiAmt} onChange={e => setAiAmt(e.target.value)} placeholder="5000"
                   style={{ ...inp, padding: '11px 14px' }} />
               </div>
@@ -207,11 +232,11 @@ export default function JournalPage() {
                   <p style={{ margin: '0 0 6px', fontSize: 12, fontWeight: 700, color: aiResult.confidence > 0.7 ? '#43E97B' : '#F5A623' }}>
                     {aiResult.confidence > 0.7 ? '✓ AI แนะนำ' : '⚠ ความมั่นใจต่ำ'} ({Math.round(aiResult.confidence * 100)}%)
                   </p>
-                  <p style={{ margin: 0, fontSize: 12, color: '#8A9BB0', lineHeight: 1.6 }}>{aiResult.explanation}</p>
+                  <p style={{ margin: 0, fontSize: 12, color: 'var(--color-text-secondary)', lineHeight: 1.6 }}>{aiResult.explanation}</p>
                 </div>
               )}
               <button onClick={handleAISuggest} disabled={aiLoading || !aiDesc || !aiAmt}
-                style={{ background: aiLoading ? '#1A2A1A' : 'linear-gradient(135deg,#00D4AA,#4FACFE)', color: aiLoading ? '#3A4A60' : '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 10, padding: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                style={{ background: aiLoading ? '#1A2A1A' : 'linear-gradient(135deg,#FF9E80,#F2714E)', color: aiLoading ? 'var(--color-dim)' : 'var(--color-bg)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 10, padding: '12px', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
                 {aiLoading ? '⏳ AI กำลังคิด...' : '🤖 ขอคำแนะนำจาก AI'}
               </button>
             </div>
@@ -223,24 +248,30 @@ export default function JournalPage() {
       {showCreate && (
         <div style={overlay} onClick={() => setShowCreate(false)}>
           <div style={modal} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #151C28', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>บันทึกรายการสมุดรายวัน</h3>
-              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>
+              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <div>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>สมุดรายวัน</label>
+                <select {...register('journal_type')} style={{ ...inp, padding: '10px 12px', cursor: 'pointer' }}>
+                  {JOURNAL_TYPES.map(t => <option key={t.key} value={t.key}>{t.full}</option>)}
+                </select>
+              </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
-                  <label style={{ ...inp, display: 'block', padding: 0, background: 'none', border: 'none', fontSize: 11, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>วันที่</label>
+                  <label style={{ ...inp, display: 'block', padding: 0, background: 'none', border: 'none', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>วันที่</label>
                   <input {...register('date')} type="date" style={inp} />
                   {errors.date && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#FF6B6B' }}>{errors.date.message}</p>}
                 </div>
                 <div>
-                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>เลขที่อ้างอิง</label>
+                  <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>เลขที่อ้างอิง</label>
                   <input {...register('reference')} placeholder="INV-001 (ไม่บังคับ)" style={inp} />
                 </div>
               </div>
               <div>
-                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>คำอธิบายรายการ</label>
+                <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>คำอธิบายรายการ</label>
                 <input {...register('description')} placeholder="รับเงินค่าบริการจากลูกค้า" style={{ ...inp, padding: '10px 14px' }} />
                 {errors.description && <p style={{ margin: '4px 0 0', fontSize: 11, color: '#FF6B6B' }}>{errors.description.message}</p>}
               </div>
@@ -248,18 +279,18 @@ export default function JournalPage() {
               {/* Entries table */}
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-                  <label style={{ fontSize: 11, fontWeight: 700, color: '#6A7A90', textTransform: 'uppercase', letterSpacing: '0.1em' }}>รายการบัญชี (Double-Entry)</label>
+                  <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>รายการบัญชี (Double-Entry)</label>
                   <button type="button" onClick={() => append({ account_id: '', debit: 0, credit: 0, description: '' })}
-                    style={{ fontSize: 11, background: '#151C28', border: '1px solid #1E2A3A', color: '#8A9BB0', borderRadius: 7, padding: '4px 10px', cursor: 'pointer' }}>
+                    style={{ fontSize: 11, background: 'var(--color-border)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-secondary)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer' }}>
                     + เพิ่มบรรทัด
                   </button>
                 </div>
-                <div style={{ background: '#070A0F', borderRadius: 10, overflow: 'hidden', border: '1px solid #151C28' }}>
+                <div style={{ background: 'var(--color-bg-inset)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr>
                         {['บัญชี','Debit (Dr)','Credit (Cr)','คำอธิบาย',''].map(h => (
-                          <th key={h} style={{ padding: '8px 10px', fontSize: 9, fontWeight: 700, color: '#3A4A60', textTransform: 'uppercase', borderBottom: '1px solid #151C28', textAlign: ['Debit (Dr)','Credit (Cr)'].includes(h) ? 'right' : 'left' }}>{h}</th>
+                          <th key={h} style={{ padding: '8px 10px', fontSize: 9, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--color-border)', textAlign: ['Debit (Dr)','Credit (Cr)'].includes(h) ? 'right' : 'left' }}>{h}</th>
                         ))}
                       </tr>
                     </thead>
@@ -292,8 +323,8 @@ export default function JournalPage() {
                       ))}
                     </tbody>
                     <tfoot>
-                      <tr style={{ background: '#0A0E16' }}>
-                        <td style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: '#4A5A70' }}>รวม</td>
+                      <tr style={{ background: 'var(--color-bg-inset)' }}>
+                        <td style={{ padding: '8px 10px', fontSize: 11, fontWeight: 700, color: 'var(--color-muted)' }}>รวม</td>
                         <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#43E97B' }}>{totalDebit.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                         <td style={{ padding: '8px 10px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, color: '#F093FB' }}>{totalCredit.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                         <td colSpan={2} style={{ padding: '8px 10px' }}>
@@ -310,9 +341,9 @@ export default function JournalPage() {
 
               {createM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล</p></div>}
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '10px 20px', borderRadius: 9, border: '1px solid #1E2A3A', background: 'transparent', color: '#6A7A90', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
+                <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '10px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
                 <button type="submit" disabled={createM.isPending || !balanced}
-                  style={{ background: balanced ? 'linear-gradient(135deg,#00D4AA,#4FACFE)' : '#1A2A1A', color: balanced ? '#07090E' : '#3A4A60', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 22px', cursor: balanced ? 'pointer' : 'not-allowed', opacity: createM.isPending ? 0.7 : 1 }}>
+                  style={{ background: balanced ? 'linear-gradient(135deg,#FF9E80,#F2714E)' : '#1A2A1A', color: balanced ? 'var(--color-bg)' : 'var(--color-dim)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 22px', cursor: balanced ? 'pointer' : 'not-allowed', opacity: createM.isPending ? 0.7 : 1 }}>
                   {createM.isPending ? 'กำลังบันทึก...' : 'บันทึก Journal'}
                 </button>
               </div>
@@ -325,24 +356,25 @@ export default function JournalPage() {
       {viewJournal && (
         <div style={overlay} onClick={() => setViewJournal(null)}>
           <div style={{ ...modal, maxWidth: 620 }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid #151C28', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div>
-                <h3 style={{ margin: '0 0 3px', fontSize: 15, fontWeight: 800, fontFamily: 'monospace', color: '#4FACFE' }}>{viewJournal.number}</h3>
-                <p style={{ margin: 0, fontSize: 12, color: '#4A5A70' }}>{viewJournal.description}</p>
+                <h3 style={{ margin: '0 0 3px', fontSize: 15, fontWeight: 800, fontFamily: 'monospace', color: 'var(--color-accent-light)' }}>{viewJournal.number}</h3>
+                <p style={{ margin: 0, fontSize: 12, color: 'var(--color-muted)' }}>{viewJournal.description}</p>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <TypeBadge type={viewJournal.journal_type} />
                 <span style={{ fontSize: 10, fontWeight: 700, color: STATUS_META[viewJournal.status].color, background: STATUS_META[viewJournal.status].color+'18', border: `1px solid ${STATUS_META[viewJournal.status].color}35`, padding: '3px 10px', borderRadius: 10 }}>
                   {STATUS_META[viewJournal.status].label}
                 </span>
-                <button onClick={() => setViewJournal(null)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>
+                <button onClick={() => setViewJournal(null)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
               </div>
             </div>
             <div style={{ padding: 24 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', background: '#070A0F', borderRadius: 10, overflow: 'hidden' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-bg-inset)', borderRadius: 10, overflow: 'hidden' }}>
                 <thead>
                   <tr>
                     {['บัญชี','Debit','Credit','คำอธิบาย'].map(h => (
-                      <th key={h} style={{ padding: '9px 14px', fontSize: 10, fontWeight: 700, color: '#3A4A60', textTransform: 'uppercase', borderBottom: '1px solid #151C28', textAlign: ['Debit','Credit'].includes(h) ? 'right' : 'left' }}>{h}</th>
+                      <th key={h} style={{ padding: '9px 14px', fontSize: 10, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--color-border)', textAlign: ['Debit','Credit'].includes(h) ? 'right' : 'left' }}>{h}</th>
                     ))}
                   </tr>
                 </thead>
@@ -350,18 +382,18 @@ export default function JournalPage() {
                   {viewJournal.entries.map((e, i) => (
                     <tr key={i}>
                       <td style={{ padding: '10px 14px', fontSize: 12 }}>
-                        <span style={{ color: '#4FACFE', fontFamily: 'monospace', marginRight: 6 }}>{e.account_code}</span>
-                        <span style={{ color: '#DDE3EE' }}>{e.account_name}</span>
+                        <span style={{ color: 'var(--color-accent-light)', fontFamily: 'monospace', marginRight: 6 }}>{e.account_code}</span>
+                        <span style={{ color: 'var(--color-text)' }}>{e.account_name}</span>
                       </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: Number(e.debit) > 0 ? '#43E97B' : '#2A3A50', fontWeight: Number(e.debit) > 0 ? 700 : 400 }}>{Number(e.debit) > 0 ? Number(e.debit).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '—'}</td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: Number(e.credit) > 0 ? '#F093FB' : '#2A3A50', fontWeight: Number(e.credit) > 0 ? 700 : 400 }}>{Number(e.credit) > 0 ? Number(e.credit).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '—'}</td>
-                      <td style={{ padding: '10px 14px', fontSize: 11, color: '#6A7A90' }}>{e.description || '—'}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: Number(e.debit) > 0 ? '#43E97B' : 'var(--color-dim)', fontWeight: Number(e.debit) > 0 ? 700 : 400 }}>{Number(e.debit) > 0 ? Number(e.debit).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '—'}</td>
+                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: Number(e.credit) > 0 ? '#F093FB' : 'var(--color-dim)', fontWeight: Number(e.credit) > 0 ? 700 : 400 }}>{Number(e.credit) > 0 ? Number(e.credit).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '—'}</td>
+                      <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--color-text-tertiary)' }}>{e.description || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr style={{ background: '#0A0E16' }}>
-                    <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 700, color: '#4A5A70' }}>รวม</td>
+                  <tr style={{ background: 'var(--color-bg-inset)' }}>
+                    <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 700, color: 'var(--color-muted)' }}>รวม</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: '#43E97B' }}>{Number(viewJournal.total_debit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                     <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: '#F093FB' }}>{Number(viewJournal.total_credit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
                     <td />
@@ -371,7 +403,7 @@ export default function JournalPage() {
               {viewJournal.status === 'draft' && (
                 <div style={{ marginTop: 20, textAlign: 'right' }}>
                   <button onClick={() => { postM.mutate(viewJournal.id); setViewJournal(null) }}
-                    style={{ background: '#43E97B', color: '#07090E', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '11px 24px', cursor: 'pointer' }}>
+                    style={{ background: '#43E97B', color: '#141018', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '11px 24px', cursor: 'pointer' }}>
                     ✓ Post Journal
                   </button>
                 </div>
