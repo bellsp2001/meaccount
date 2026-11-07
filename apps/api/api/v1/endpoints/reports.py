@@ -16,6 +16,8 @@ from services.reports import (
     get_ratio_analysis, close_period, get_periods,
 )
 from services.ai_reports import analyze_financials
+from services.ledger_reports import trial_balance, general_ledger
+from uuid import UUID
 
 router = APIRouter(prefix="/reports", tags=["Financial Statements"])
 
@@ -30,6 +32,18 @@ def profit_loss_ep(period_from: date = Query(...), period_to: date = Query(...),
 def balance_sheet_ep(as_of_date: date = Query(...),
                      current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return get_balance_sheet(db, as_of_date)
+
+
+@router.get("/trial-balance")
+def trial_balance_ep(period_from: date = Query(...), period_to: date = Query(...),
+                     current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return trial_balance(db, period_from, period_to)
+
+
+@router.get("/general-ledger")
+def general_ledger_ep(account_id: UUID = Query(...), period_from: date = Query(...), period_to: date = Query(...),
+                      current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return general_ledger(db, account_id, period_from, period_to)
 
 
 @router.get("/cash-flow", response_model=CashFlowResponse)

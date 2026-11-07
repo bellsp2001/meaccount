@@ -15,7 +15,7 @@ from schemas.sales import (
 from schemas.ar import InvoiceResponse
 from services.sales import (
     create_sales_document, list_sales_documents, get_sales_document,
-    set_status, convert_document, post_deposit_to_gl,
+    set_status, convert_document, post_deposit_to_gl, post_note_to_gl,
     list_tax_invoices, list_receipts, sales_report,
 )
 
@@ -71,6 +71,14 @@ def post_deposit(
     current_user: User = Depends(require_accountant_up), db: Session = Depends(get_db),
 ):
     return post_deposit_to_gl(db, doc_id, user_id=current_user.id)
+
+
+@router.post("/sales-documents/{doc_id}/post-note", response_model=SalesDocResponse)
+def post_note(
+    doc_id: UUID,
+    current_user: User = Depends(require_accountant_up), db: Session = Depends(get_db),
+):
+    return post_note_to_gl(db, doc_id, user_id=current_user.id)
 
 
 @router.post("/sales-documents/{doc_id}/cancel", response_model=SalesDocResponse)

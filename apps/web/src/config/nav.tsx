@@ -1,8 +1,9 @@
 import type { UserRole } from '@/types'
 import { AppIcon } from './icons'
 
-/** `roles` narrows a sub-item below its parent's roles; omitted means the parent's roles. */
-export interface SubItem { to: string; label: string; roles?: UserRole[] }
+/** `roles` narrows a sub-item below its parent's roles; omitted means the parent's roles.
+ *  `section` starts a titled group in the sub-menu; it carries over to the items after it. */
+export interface SubItem { to: string; label: string; roles?: UserRole[]; section?: string }
 export interface NavItem { to: string; icon: string; label: string; roles: UserRole[]; badge?: string; children?: SubItem[] }
 
 export const NAV: NavItem[] = [
@@ -11,23 +12,35 @@ export const NAV: NavItem[] = [
     to: '/ar', icon: 'receivable', label: 'การขาย/รายได้', roles: ['admin','accountant','cashier'],
     children: [
       { to: '/ar/quotations',   label: 'ใบเสนอราคา' },
-      { to: '/ar/orders',       label: 'คำสั่งขาย' },
+      { to: '/ar/orders',       label: 'ใบสั่งขาย/คำสั่งขาย' },
       { to: '/ar',              label: 'ใบแจ้งหนี้' },
       { to: '/ar/tax-invoices', label: 'ใบกำกับภาษี' },
-      { to: '/ar/receipts',     label: 'การชำระ/ใบเสร็จรับเงิน' },
-      { to: '/ar/deposits',     label: 'ใบมัดจำ' },
-      { to: '/ar/reports',      label: 'รายงานการขาย' },
-      { to: '/ar/customers',    label: 'รายชื่อลูกค้า' },
-      { to: '/ar/aging',        label: 'รายงานอายุหนี้' },
+      { to: '/ar/receipts',     label: 'ใบเสร็จรับเงิน/การชำระเงิน' },
+      { to: '/ar/deposits',     label: 'ใบรับมัดจำ' },
+      { to: '/ar/credit-notes', label: 'ใบลดหนี้' },
+      { to: '/ar/debit-notes',  label: 'ใบเพิ่มหนี้' },
       { to: '/ar/books',        label: 'สมุดบันทึก', roles: ['admin','accountant'] },
     ],
   },
   {
     to: '/ap', icon: 'payable', label: 'รายจ่าย/ค่าใช้จ่าย', roles: ['admin','accountant','cashier'],
     children: [
-      { to: '/ap',            label: 'บิล / ค่าใช้จ่าย' },
-      { to: '/ap/suppliers',  label: 'รายชื่อผู้จำหน่าย' },
-      { to: '/ap/books',      label: 'สมุดบันทึก', roles: ['admin','accountant'] },
+      { to: '/ap/rfq',          label: 'ใบขอเสนอราคา' },
+      { to: '/ap/orders',       label: 'ใบสั่งซื้อ/คำสั่งซื้อ' },
+      { to: '/ap',              label: 'ใบแจ้งหนี้' },
+      { to: '/ap/tax-invoices', label: 'ใบกำกับภาษี' },
+      { to: '/ap/payments',     label: 'ใบเสร็จรับเงิน/การชำระเงิน' },
+      { to: '/ap/deposits',     label: 'ใบจ่ายมัดจำ' },
+      { to: '/ap/credit-notes', label: 'ใบลดหนี้' },
+      { to: '/ap/debit-notes',  label: 'ใบเพิ่มหนี้' },
+      { to: '/ap/books',        label: 'สมุดบันทึก', roles: ['admin','accountant'] },
+    ],
+  },
+  {
+    to: '/ar/customers', icon: 'contacts', label: 'ผู้ติดต่อ', roles: ['admin','accountant','cashier'],
+    children: [
+      { to: '/ar/customers', label: 'ลูกค้า' },
+      { to: '/ap/suppliers', label: 'ผู้จำหน่าย' },
     ],
   },
   {
@@ -60,10 +73,16 @@ export const NAV: NavItem[] = [
   {
     to: '/reports', icon: 'reports', label: 'รายงาน', roles: ['admin','accountant','manager','auditor'],
     children: [
-      { to: '/reports',         label: 'งบการเงิน' },
-      { to: '/reports/builder', label: 'Report Builder' },
-      { to: '/reports/ask',     label: 'ถามด้วยภาษาพูด' },
-      { to: '/analytics',       label: 'Predictive Analytics', roles: ['admin','accountant','manager'] },
+      { to: '/reports',               label: 'งบการเงิน',          section: 'งบการเงิน' },
+      { to: '/reports/trial-balance', label: 'งบทดลอง',            section: 'รายงานทางบัญชี' },
+      { to: '/reports/ledger',        label: 'บัญชีแยกประเภท' },
+      { to: '/reports/builder',       label: 'Report Builder' },
+      { to: '/reports/ask',           label: 'ถามด้วยภาษาพูด',     roles: ['admin','accountant','manager'] },
+      { to: '/analytics',             label: 'Predictive Analytics', roles: ['admin','accountant','manager'] },
+      { to: '/reports/sales',         label: 'รายงานการขาย',       section: 'รายงานการขาย/รายได้', roles: ['admin','accountant'] },
+      { to: '/reports/ar-aging',      label: 'อายุลูกหนี้',          roles: ['admin','accountant'] },
+      { to: '/reports/expenses',      label: 'รายงานค่าใช้จ่าย',    section: 'รายงานรายจ่าย/ค่าใช้จ่าย', roles: ['admin','accountant'] },
+      { to: '/reports/ap-aging',      label: 'อายุเจ้าหนี้',         roles: ['admin','accountant'] },
     ],
   },
   { to: '/ai-chat',   icon: 'ai', label: 'AI Assistant', roles: ['admin','accountant','manager'], badge: 'Beta' },
@@ -117,18 +136,22 @@ export const navTint = (i: number): [string, string] => ICON_TINTS[i % ICON_TINT
 export function allowedNav(role?: string): NavItem[] {
   return NAV
     .filter(n => role && n.roles.includes(role as UserRole))
-    .map(n => n.children?.some(c => c.roles)
-      ? { ...n, children: n.children.filter(c => !c.roles || c.roles.includes(role as UserRole)) }
-      : n)
+    .map(n => {
+      if (!n.children) return n
+      // Resolve each item's section before filtering, so a hidden first item doesn't take its heading with it.
+      let section: string | undefined
+      const children = n.children
+        .map(c => ({ ...c, section: (section = c.section ?? section) }))
+        .filter(c => !c.roles || c.roles.includes(role as UserRole))
+      return { ...n, children }
+    })
 }
 
-/** Resolve the top-level app that owns the current path. */
+/** Resolve the top-level app that owns the current path. An exact route match wins over a
+ *  path prefix, so /ar/customers belongs to ผู้ติดต่อ rather than to /ar. */
 export function findActiveNav(pathname: string, items: NavItem[] = NAV): NavItem | undefined {
-  return items.find(item =>
-    pathname === item.to ||
-    item.children?.some(c => pathname === c.to) ||
-    (pathname.startsWith(item.to + '/') && item.to !== '/dashboard'),
-  )
+  return items.find(item => pathname === item.to || item.children?.some(c => pathname === c.to))
+    ?? items.find(item => pathname.startsWith(item.to + '/') && item.to !== '/dashboard')
 }
 
 /** Frosted iOS-style squircle icon tile with a unified line icon. */

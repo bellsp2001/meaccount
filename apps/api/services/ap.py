@@ -188,23 +188,8 @@ def post_bill_to_gl(db: Session, bill_id: UUID, user_id: Optional[UUID] = None) 
     if bill.status not in (BillStatus.APPROVED, BillStatus.DRAFT):
         raise HTTPException(400, "Bill ต้องอยู่ในสถานะ Approved หรือ Draft ก่อน Post GL")
 
-    # A สมุดบันทึก on the bill overrides the default mapping: its expense account (ahead of the
-    # bill's category), its counter account (เจ้าหนี้ or เงินสด) and its journal.
-    book = bill.book
-    ap_acc    = (book and book.counter_account) or _find_acc(db, ["2101","21"])
-    vat_acc   = _find_acc(db, ["1401","14"])      # VAT Input
+    ap_acc, exp_acc, vat_acc, journal_type = bill_posting_accounts(db, bill)
     wht_acc   = _find_acc(db, ["2104","21"])      # WHT Payable
-    journal_type = book.journal_type if book else JournalType.PURCHASE
-
-    # Book's account, then category's account, then a generic expense
-    exp_acc = book.account if book else None
-    if not exp_acc and bill.category and bill.category.gl_account:
-        exp_acc = bill.category.gl_account
-    if not exp_acc:
-        exp_acc = _find_acc(db, ["5401","5301","5302","51","50"])
-
-    if not ap_acc or not exp_acc:
-        raise HTTPException(400, "ไม่พบบัญชีเจ้าหนี้หรือค่าใช้จ่ายในผังบัญชี")
 
     entries = [
         {"account_id": exp_acc.id, "debit": bill.subtotal, "credit": Decimal("0"),
@@ -227,6 +212,28 @@ def post_bill_to_gl(db: Session, bill_id: UUID, user_id: Optional[UUID] = None) 
     bill.gl_posted = True
     db.commit(); db.refresh(bill)
     return bill
+
+
+def bill_posting_accounts(db: Session, bill: Bill):
+    """(เจ้าหนี้, ค่าใช้จ่าย, VAT ซื้อ, journal type) a bill posts to — shared with credit/debit notes.
+
+    A สมุดบันทึก on the bill overrides the default mapping: its expense account (ahead of the
+    bill's category), its counter account (เจ้าหนี้ or เงินสด) and its journal."""
+    book = bill.book
+    ap_acc  = (book and book.counter_account) or _find_acc(db, ["2101","21"])
+    vat_acc = _find_acc(db, ["1401","14"])
+    journal_type = book.journal_type if book else JournalType.PURCHASE
+
+    # Book's account, then category's account, then a generic expense
+    exp_acc = book.account if book else None
+    if not exp_acc and bill.category and bill.category.gl_account:
+        exp_acc = bill.category.gl_account
+    if not exp_acc:
+        exp_acc = _find_acc(db, ["5401","5301","5302","51","50"])
+
+    if not ap_acc or not exp_acc:
+        raise HTTPException(400, "ไม่พบบัญชีเจ้าหนี้หรือค่าใช้จ่ายในผังบัญชี")
+    return ap_acc, exp_acc, vat_acc, journal_type
 
 
 # ── Payment ────────────────────────────────────────────────────

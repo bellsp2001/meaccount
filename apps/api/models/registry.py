@@ -21,6 +21,7 @@ import models.accounting    # noqa: F401
 import models.ar            # noqa: F401
 import models.sales         # noqa: F401
 import models.ap            # noqa: F401
+import models.purchase      # noqa: F401
 import models.inventory     # noqa: F401
 import models.payroll       # noqa: F401
 import models.tax           # noqa: F401

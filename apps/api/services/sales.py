@@ -18,6 +18,7 @@ from models.ar import Customer, Invoice, InvoiceStatus, Payment
 from models.accounting import Account, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.ar import _find_account, create_invoice
+from services.ap import _create_posted_journal
 from schemas.sales import SalesDocCreate, SalesItemCreate
 from schemas.ar import InvoiceCreate, InvoiceItemCreate
 
@@ -26,7 +27,10 @@ _PREFIX = {
     SalesDocType.QUOTATION:   "QT",
     SalesDocType.SALES_ORDER: "SO",
     SalesDocType.DEPOSIT:     "DEP",
+    SalesDocType.CREDIT_NOTE: "CN",
+    SalesDocType.DEBIT_NOTE:  "DN",
 }
+NOTE_TYPES = (SalesDocType.CREDIT_NOTE, SalesDocType.DEBIT_NOTE)
 
 
 # ── Numbering ──────────────────────────────────────────────────
@@ -50,6 +54,9 @@ def create_sales_document(db: Session, payload: SalesDocCreate, user_id: Optiona
     customer = db.query(Customer).filter(Customer.id == payload.customer_id, Customer.is_deleted == False).first()
     if not customer:
         raise HTTPException(404, "ไม่พบลูกค้า")
+    is_note = payload.doc_type in NOTE_TYPES
+    if is_note:
+        _issued_invoice_for(db, payload.invoice_id, payload.customer_id)
 
     subtotal, vat_amount, total = _calc_totals(payload.items, payload.vat_rate)
     doc = SalesDocument(
@@ -59,6 +66,8 @@ def create_sales_document(db: Session, payload: SalesDocCreate, user_id: Optiona
         vat_rate=payload.vat_rate, subtotal=subtotal, vat_amount=vat_amount, total=total,
         deposit_amount=payload.deposit_amount if payload.doc_type == SalesDocType.DEPOSIT else Decimal("0"),
         note=payload.note, created_by=user_id,
+        invoice_id=payload.invoice_id if is_note else None,
+        reason=payload.reason if is_note else None,
     )
     db.add(doc); db.flush()
     for i, it in enumerate(payload.items):
@@ -95,6 +104,8 @@ def set_status(db: Session, doc_id: UUID, status: SalesDocStatus) -> SalesDocume
     doc = get_sales_document(db, doc_id)
     if doc.status in (SalesDocStatus.CONVERTED, SalesDocStatus.CANCELLED):
         raise HTTPException(400, "เอกสารนี้ถูกแปลง/ยกเลิกแล้ว ไม่สามารถเปลี่ยนสถานะ")
+    if doc.gl_posted and status == SalesDocStatus.CANCELLED:
+        raise HTTPException(400, "เอกสารนี้ Post ไป GL แล้ว ไม่สามารถยกเลิกได้")
     doc.status = status
     db.commit(); db.refresh(doc)
     return doc
@@ -108,6 +119,8 @@ def convert_document(db: Session, doc_id: UUID, user_id: Optional[UUID] = None):
         raise HTTPException(400, "เอกสารนี้ถูกแปลงหรือยกเลิกไปแล้ว")
     if doc.doc_type == SalesDocType.DEPOSIT:
         raise HTTPException(400, "ใบมัดจำไม่สามารถแปลงเป็นเอกสารถัดไปได้")
+    if doc.doc_type in NOTE_TYPES:
+        raise HTTPException(400, "ใบลดหนี้/ใบเพิ่มหนี้ไม่สามารถแปลงเป็นเอกสารถัดไปได้")
 
     items = [SalesItemCreate(
         description=it.description, quantity=it.quantity, unit=it.unit,
@@ -187,6 +200,83 @@ def post_deposit_to_gl(db: Session, doc_id: UUID, user_id: Optional[UUID] = None
                 acc.balance += ed["debit"] - ed["credit"]
             else:
                 acc.balance += ed["credit"] - ed["debit"]
+
+    doc.gl_posted = True
+    doc.gl_journal_id = journal.id
+    doc.status = SalesDocStatus.ACCEPTED
+    db.commit(); db.refresh(doc)
+    return doc
+
+
+# ── Credit / Debit notes ───────────────────────────────────────
+def _issued_invoice_for(db: Session, invoice_id: Optional[UUID], customer_id: UUID) -> Invoice:
+    if not invoice_id:
+        raise HTTPException(400, "ใบลดหนี้/ใบเพิ่มหนี้ต้องอ้างอิงใบแจ้งหนี้")
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id, Invoice.is_deleted == False).first()
+    if not inv:
+        raise HTTPException(404, "ไม่พบใบแจ้งหนี้ที่อ้างอิง")
+    if not inv.gl_posted or inv.status == InvoiceStatus.CANCELLED:
+        raise HTTPException(400, "ใบแจ้งหนี้ที่อ้างอิงต้องออกแล้ว (Post GL) และไม่ถูกยกเลิก")
+    if inv.customer_id != customer_id:
+        raise HTTPException(400, "ลูกค้าไม่ตรงกับใบแจ้งหนี้ที่อ้างอิง")
+    return inv
+
+
+def post_note_to_gl(db: Session, doc_id: UUID, user_id: Optional[UUID] = None) -> SalesDocument:
+    """Issue a note against its invoice.
+    Credit note: Dr รายได้ + VAT ขาย / Cr ลูกหนี้ — lowers the invoice's balance.
+    Debit note:  Dr ลูกหนี้ / Cr รายได้ + VAT ขาย — raises it."""
+    doc = get_sales_document(db, doc_id)
+    if doc.doc_type not in NOTE_TYPES:
+        raise HTTPException(400, "เอกสารนี้ไม่ใช่ใบลดหนี้/ใบเพิ่มหนี้")
+    if doc.gl_posted:
+        raise HTTPException(400, "เอกสารนี้ Post ไป GL แล้ว")
+    if doc.status == SalesDocStatus.CANCELLED:
+        raise HTTPException(400, "เอกสารนี้ถูกยกเลิกแล้ว")
+    inv = _issued_invoice_for(db, doc.invoice_id, doc.customer_id)
+    is_credit = doc.doc_type == SalesDocType.CREDIT_NOTE
+    if is_credit and doc.total > inv.balance_due:
+        raise HTTPException(400, f"ยอดลดหนี้เกินยอดค้างชำระของ {inv.number} ({inv.balance_due})")
+
+    # Same accounts the invoice posted to, so the note reverses (or extends) exactly those lines.
+    book = inv.book
+    ar_acc  = (book and book.counter_account) or _find_account(db, ["1201", "1200", "12"])
+    rev_acc = (book and book.account) or _find_account(db, ["4101", "4100", "41"])
+    vat_acc = _find_account(db, ["2103", "21"])
+    if not ar_acc or not rev_acc:
+        raise HTTPException(400, "ไม่พบบัญชีลูกหนี้หรือรายได้ในผังบัญชี")
+
+    zero = Decimal("0")
+    label = "ลดหนี้" if is_credit else "เพิ่มหนี้"
+    lines = [
+        (ar_acc, doc.total, f"{label} {doc.number} อ้างอิง {inv.number}"),
+        (rev_acc, -doc.subtotal, f"รายได้ {label} {doc.number}"),
+    ]
+    if vat_acc and doc.vat_amount > 0:
+        lines.append((vat_acc, -doc.vat_amount, f"VAT ขาย {label} {doc.number}"))
+    # A debit note keeps the invoice's signs (AR debit); a credit note flips every line.
+    sign = -1 if is_credit else 1
+    entries = []
+    for acc, amount, desc in lines:
+        amount = amount * sign
+        entries.append({"account_id": acc.id, "debit": amount if amount > 0 else zero,
+                        "credit": -amount if amount < 0 else zero, "description": desc})
+
+    journal = _create_posted_journal(
+        db, doc.date, f"{label} {doc.number} — {doc.customer.name}", doc.number,
+        entries, user_id, book.journal_type if book else JournalType.SALES,
+    )
+
+    if is_credit:
+        inv.balance_due -= doc.total
+    else:
+        inv.balance_due += doc.total
+    if inv.balance_due <= 0:
+        inv.status = InvoiceStatus.PAID
+    elif inv.paid_amount > 0:
+        inv.status = InvoiceStatus.PARTIAL
+    else:
+        inv.status = InvoiceStatus.SENT
 
     doc.gl_posted = True
     doc.gl_journal_id = journal.id
