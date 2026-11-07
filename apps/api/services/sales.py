@@ -80,6 +80,37 @@ def create_sales_document(db: Session, payload: SalesDocCreate, user_id: Optiona
     return doc
 
 
+EDITABLE = (SalesDocStatus.DRAFT, SalesDocStatus.SENT)
+
+
+def update_sales_document(db: Session, doc_id: UUID, payload: SalesDocCreate) -> SalesDocument:
+    """Rewrite a document's header and items. Only while it is a draft or sent and not
+    yet posted to GL; the number and type stay."""
+    doc = get_sales_document(db, doc_id)
+    if doc.gl_posted or doc.status not in EDITABLE:
+        raise HTTPException(400, "แก้ไขได้เฉพาะเอกสารที่ยังไม่ Post GL และยังไม่ถูกแปลง/ยกเลิก")
+    if payload.doc_type != doc.doc_type:
+        raise HTTPException(400, "เปลี่ยนประเภทเอกสารไม่ได้")
+    if not db.query(Customer).filter(Customer.id == payload.customer_id, Customer.is_deleted == False).first():
+        raise HTTPException(404, "ไม่พบลูกค้า")
+    is_note = doc.doc_type in NOTE_TYPES
+    if is_note:
+        _issued_invoice_for(db, payload.invoice_id, payload.customer_id)
+
+    doc.subtotal, doc.vat_amount, doc.total = _calc_totals(payload.items, payload.vat_rate)
+    doc.customer_id, doc.date, doc.valid_until = payload.customer_id, payload.date, payload.valid_until
+    doc.vat_rate, doc.note = payload.vat_rate, payload.note
+    if doc.doc_type == SalesDocType.DEPOSIT:
+        doc.deposit_amount = payload.deposit_amount
+    if is_note:
+        doc.invoice_id, doc.reason = payload.invoice_id, payload.reason
+    doc.items = [SalesDocumentItem(sequence=i, description=it.description, quantity=it.quantity, unit=it.unit,
+                                   unit_price=it.unit_price, discount_pct=it.discount_pct, amount=it.amount)
+                 for i, it in enumerate(payload.items)]
+    db.commit(); db.refresh(doc)
+    return doc
+
+
 def list_sales_documents(db: Session, doc_type: SalesDocType,
                          status: Optional[SalesDocStatus] = None,
                          customer_id: Optional[UUID] = None,

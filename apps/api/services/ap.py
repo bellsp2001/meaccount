@@ -14,6 +14,7 @@ from models.ap import (Supplier, Bill, BillItem, APPayment,
 from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.document_books import resolve_book
+from services.contacts import link_role, sync_from_role
 from schemas.ap import (SupplierCreate, SupplierUpdate,
                         BillCreate, APPaymentCreate, ApprovalAction)
 
@@ -52,7 +53,8 @@ def seed_default_categories(db: Session):
 # ── Supplier ───────────────────────────────────────────────────
 
 def get_suppliers(db: Session, search: Optional[str] = None) -> List[Supplier]:
-    q = db.query(Supplier).filter(Supplier.is_deleted == False)
+    # Inactive = the contact's supplier role was removed; keep it out of document pickers.
+    q = db.query(Supplier).filter(Supplier.is_deleted == False, Supplier.is_active == True)
     if search:
         q = q.filter(or_(
             Supplier.name.ilike(f"%{search}%"),
@@ -67,7 +69,9 @@ def create_supplier(db: Session, payload: SupplierCreate) -> Supplier:
                                   Supplier.is_deleted == False).first():
         raise HTTPException(400, f"รหัสผู้จำหน่าย {payload.code} มีอยู่แล้ว")
     s = Supplier(**payload.model_dump())
-    db.add(s); db.commit(); db.refresh(s)
+    db.add(s); db.flush()
+    link_role(db, s)
+    db.commit(); db.refresh(s)
     return s
 
 
@@ -77,6 +81,7 @@ def update_supplier(db: Session, sid: UUID, payload: SupplierUpdate) -> Supplier
         raise HTTPException(404, "ไม่พบผู้จำหน่าย")
     for k, v in payload.model_dump(exclude_none=True).items():
         setattr(s, k, v)
+    sync_from_role(db, s)
     db.commit(); db.refresh(s)
     return s
 
@@ -131,6 +136,38 @@ def create_bill(db: Session, payload: BillCreate, user_id: Optional[UUID] = None
             unit=it.unit, unit_price=it.unit_price, amount=it.amount,
         ))
 
+    db.commit(); db.refresh(bill)
+    return bill
+
+
+def update_bill(db: Session, bill_id: UUID, payload: BillCreate) -> Bill:
+    """Rewrite a draft or rejected bill's header and items (a rejected bill goes back to
+    draft). The number stays."""
+    bill = _get_bill_or_404(db, bill_id)
+    if bill.gl_posted or bill.status not in (BillStatus.DRAFT, BillStatus.REJECTED):
+        raise HTTPException(400, "แก้ไขได้เฉพาะ Bill ที่เป็น Draft หรือถูกปฏิเสธ และยังไม่ Post GL")
+    if payload.supplier_id:
+        sup = db.query(Supplier).filter(Supplier.id == payload.supplier_id).first()
+        if not sup:
+            raise HTTPException(404, "ไม่พบผู้จำหน่าย")
+        terms = sup.payment_terms
+    else:
+        terms = 30
+    resolve_book(db, payload.book_id, BookSide.EXPENSE)
+
+    subtotal   = sum(it.amount for it in payload.items)
+    vat_amount = (subtotal * payload.vat_rate / 100).quantize(Decimal("0.01"))
+    wht_amount = (subtotal * payload.wht_rate / 100).quantize(Decimal("0.01"))
+    bill.supplier_id, bill.category_id, bill.book_id = payload.supplier_id, payload.category_id, payload.book_id
+    bill.date, bill.due_date = payload.date, payload.due_date or (payload.date + timedelta(days=terms))
+    bill.ref_number, bill.description, bill.note = payload.ref_number, payload.description, payload.note
+    bill.vat_rate, bill.vat_amount, bill.wht_rate, bill.wht_amount = payload.vat_rate, vat_amount, payload.wht_rate, wht_amount
+    bill.subtotal, bill.total = subtotal, subtotal + vat_amount
+    bill.net_payable = bill.balance_due = bill.total - wht_amount
+    bill.status = BillStatus.DRAFT
+    bill.items = [BillItem(sequence=i, description=it.description, quantity=it.quantity, unit=it.unit,
+                           unit_price=it.unit_price, amount=it.amount)
+                  for i, it in enumerate(payload.items)]
     db.commit(); db.refresh(bill)
     return bill
 

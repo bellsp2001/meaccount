@@ -13,13 +13,15 @@ from models.ar import Customer, Invoice, InvoiceItem, Payment, InvoiceStatus, Pa
 from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.document_books import resolve_book
+from services.contacts import link_role, sync_from_role
 from schemas.ar import CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate
 
 
 # ── Customer ───────────────────────────────────────────────────
 
 def get_customers(db: Session, search: Optional[str] = None, skip=0, limit=50) -> List[Customer]:
-    q = db.query(Customer).filter(Customer.is_deleted == False)
+    # Inactive = the contact's customer role was removed; keep it out of document pickers.
+    q = db.query(Customer).filter(Customer.is_deleted == False, Customer.is_active == True)
     if search:
         q = q.filter(or_(
             Customer.name.ilike(f"%{search}%"),
@@ -33,7 +35,9 @@ def create_customer(db: Session, payload: CustomerCreate) -> Customer:
     if db.query(Customer).filter(Customer.code == payload.code, Customer.is_deleted == False).first():
         raise HTTPException(400, f"รหัสลูกค้า {payload.code} มีอยู่แล้ว")
     c = Customer(**payload.model_dump())
-    db.add(c); db.commit(); db.refresh(c)
+    db.add(c); db.flush()
+    link_role(db, c)
+    db.commit(); db.refresh(c)
     return c
 
 
@@ -43,6 +47,7 @@ def update_customer(db: Session, cid: UUID, payload: CustomerUpdate) -> Customer
         raise HTTPException(404, "ไม่พบลูกค้า")
     for k, v in payload.model_dump(exclude_none=True).items():
         setattr(c, k, v)
+    sync_from_role(db, c)
     db.commit(); db.refresh(c)
     return c
 
@@ -90,6 +95,32 @@ def create_invoice(db: Session, payload: InvoiceCreate, user_id: Optional[UUID] 
             discount_pct=it.discount_pct, amount=it.amount,
         ))
 
+    db.commit(); db.refresh(inv)
+    return inv
+
+
+def update_invoice(db: Session, invoice_id: UUID, payload: InvoiceCreate) -> Invoice:
+    """Rewrite an invoice's header and items while it is not posted to GL and has no
+    payment. The number stays."""
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id, Invoice.is_deleted == False).first()
+    if not inv:
+        raise HTTPException(404, "ไม่พบใบแจ้งหนี้")
+    if inv.gl_posted or inv.paid_amount or inv.status == InvoiceStatus.CANCELLED:
+        raise HTTPException(400, "แก้ไขได้เฉพาะใบแจ้งหนี้ที่ยังไม่ Post GL และยังไม่รับชำระ")
+    customer = db.query(Customer).filter(Customer.id == payload.customer_id).first()
+    if not customer:
+        raise HTTPException(404, "ไม่พบลูกค้า")
+    resolve_book(db, payload.book_id, BookSide.INCOME)
+
+    subtotal = sum(item.amount for item in payload.items)
+    vat_amount = (subtotal * payload.vat_rate / 100).quantize(Decimal("0.01"))
+    inv.customer_id, inv.date, inv.book_id, inv.note = payload.customer_id, payload.date, payload.book_id, payload.note
+    inv.due_date = payload.due_date or (payload.date + timedelta(days=customer.credit_days))
+    inv.vat_rate, inv.subtotal, inv.vat_amount = payload.vat_rate, subtotal, vat_amount
+    inv.total = inv.balance_due = subtotal + vat_amount
+    inv.items = [InvoiceItem(sequence=i, description=it.description, quantity=it.quantity, unit=it.unit,
+                             unit_price=it.unit_price, discount_pct=it.discount_pct, amount=it.amount)
+                 for i, it in enumerate(payload.items)]
     db.commit(); db.refresh(inv)
     return inv
 

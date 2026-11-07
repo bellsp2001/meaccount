@@ -37,10 +37,10 @@ export const NAV: NavItem[] = [
     ],
   },
   {
-    to: '/ar/customers', icon: 'contacts', label: 'ผู้ติดต่อ', roles: ['admin','accountant','cashier'],
+    to: '/contacts', icon: 'contacts', label: 'ผู้ติดต่อ', roles: ['admin','accountant','cashier'],
     children: [
-      { to: '/ar/customers', label: 'ลูกค้า' },
-      { to: '/ap/suppliers', label: 'ผู้จำหน่าย' },
+      { to: '/contacts',        label: 'รายชื่อผู้ติดต่อ' },
+      { to: '/contacts/groups', label: 'กลุ่มประเภทลูกค้า' },
     ],
   },
   {
@@ -148,7 +148,7 @@ export function allowedNav(role?: string): NavItem[] {
 }
 
 /** Resolve the top-level app that owns the current path. An exact route match wins over a
- *  path prefix, so /ar/customers belongs to ผู้ติดต่อ rather than to /ar. */
+ *  path prefix, so /ar/tax-invoices belongs to การขาย rather than to a parent at /ar. */
 export function findActiveNav(pathname: string, items: NavItem[] = NAV): NavItem | undefined {
   return items.find(item => pathname === item.to || item.children?.some(c => pathname === c.to))
     ?? items.find(item => pathname.startsWith(item.to + '/') && item.to !== '/dashboard')

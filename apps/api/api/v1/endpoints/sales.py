@@ -14,7 +14,7 @@ from schemas.sales import (
 )
 from schemas.ar import InvoiceResponse
 from services.sales import (
-    create_sales_document, list_sales_documents, get_sales_document,
+    create_sales_document, update_sales_document, list_sales_documents, get_sales_document,
     set_status, convert_document, post_deposit_to_gl, post_note_to_gl,
     list_tax_invoices, list_receipts, sales_report,
 )
@@ -42,6 +42,12 @@ def create_doc(
     db: Session = Depends(get_db),
 ):
     return create_sales_document(db, payload, user_id=current_user.id)
+
+
+@router.put("/sales-documents/{doc_id}", response_model=SalesDocResponse)
+def update_doc(doc_id: UUID, payload: SalesDocCreate,
+               current_user: User = Depends(require_accountant_up), db: Session = Depends(get_db)):
+    return update_sales_document(db, doc_id, payload)
 
 
 @router.get("/sales-documents/{doc_id}", response_model=SalesDocResponse)
