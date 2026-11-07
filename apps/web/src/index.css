@@ -128,6 +128,26 @@
   --color-card: var(--color-popover);
 }
 
+/* Document form in view mode: the same form, inside <fieldset disabled class="doc-ro">,
+   with its fields reading as plain text so view, create and edit share one layout. */
+fieldset.doc-form { border: 0; margin: 0; padding: 0; min-width: 0; }
+.doc-ro :is(input, select, textarea) {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--color-text) !important;
+  opacity: 1;
+  cursor: default !important;
+  -webkit-appearance: none;
+  appearance: none;
+  resize: none !important;
+}
+.doc-ro :is(input, textarea)::placeholder { color: transparent; }
+.doc-ro input::-webkit-calendar-picker-indicator,
+.doc-ro input::-webkit-inner-spin-button,
+.doc-ro input::-webkit-outer-spin-button { display: none; -webkit-appearance: none; }
+.doc-ro input[type="number"] { -moz-appearance: textfield; }
+.doc-ro .doc-edit-only { display: none !important; }
+
 * { box-sizing: border-box; }
 
 body {

@@ -8,12 +8,14 @@ import api from '@/lib/api'
 import { JOURNAL_TYPES, JOURNAL_TYPE_META, isJournalType, type JournalType } from '@/config/journals'
 import { JournalTypeBadge as TypeBadge } from '@/components/ui/JournalTypeBadge'
 import DocCard from '@/components/doc/DocCard'
+import { docBadge, docPrimaryBtn, docCancelBtn, docFooter, docLockedNote } from '@/components/doc/docStyles'
 
 interface Account { id: string; code: string; name: string; account_type: string; normal_balance: string }
 interface JEntry  { id: string; account_id: string; account_code?: string; account_name?: string; debit: number; credit: number; description?: string }
-interface Journal { id: string; number: string; date: string; description: string; journal_type: JournalType; status: 'draft'|'posted'|'reversed'; entries: JEntry[]; total_debit?: number; total_credit?: number; ai_suggested?: boolean }
+interface Journal { id: string; number: string; date: string; description: string; reference?: string; journal_type: JournalType; status: 'draft'|'posted'|'reversed'; entries: JEntry[]; total_debit?: number; total_credit?: number; ai_suggested?: boolean }
 
 const TYPE_META = JOURNAL_TYPE_META
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 const entrySchema = z.object({
   account_id:  z.string().min(1, 'เลือกบัญชี'),
@@ -51,6 +53,8 @@ export default function JournalPage() {
   const [aiAmt, setAiAmt] = useState('')
   const [aiLoading, setAiLoading] = useState(false)
   const [aiResult, setAiResult] = useState<{explanation:string;confidence:number}|null>(null)
+  // One card serves recording and viewing: `viewJournal` is the journal shown (null = new);
+  // a recorded journal opens read-only in the same layout.
   const [viewJournal, setViewJournal] = useState<Journal|null>(null)
 
   // The selected book lives in the URL (?type=sales) so it survives reloads and can be linked to.
@@ -70,7 +74,7 @@ export default function JournalPage() {
 
   const createM = useMutation({
     mutationFn: (d: JForm) => api.post('/api/v1/journals/', d),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['journals'] }); setShowCreate(false); reset() },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['journals'] }); openView(r.data) },   // recorded: show it
   })
   const postM = useMutation({
     mutationFn: (id: string) => api.post(`/api/v1/journals/${id}/post`),
@@ -81,13 +85,29 @@ export default function JournalPage() {
     resolver: zodResolver(journalSchema),
     defaultValues: {
       journal_type: 'general',
-      date: new Date().toISOString().split('T')[0],
+      date: localToday(),
       entries: [
         { account_id: '', debit: 0, credit: 0, description: '' },
         { account_id: '', debit: 0, credit: 0, description: '' },
       ],
     },
   })
+  const blankEntry = { account_id: '', debit: 0, credit: 0, description: '' }
+  const openCreate = () => {
+    setViewJournal(null); setAiResult(null); createM.reset()
+    reset({ journal_type: activeType ?? 'general', date: localToday(), description: '', reference: '', entries: [blankEntry, { ...blankEntry }] })
+    setShowCreate(true)
+  }
+  const openView = (j: Journal) => {
+    setViewJournal(j); createM.reset()
+    reset({ journal_type: j.journal_type, date: j.date, description: j.description, reference: j.reference ?? '',
+            entries: j.entries.map(e => ({ account_id: e.account_id, debit: Number(e.debit), credit: Number(e.credit), description: e.description ?? '' })) })
+    setShowCreate(true)
+  }
+  const closeCard = () => { setShowCreate(false); setViewJournal(null) }
+  const readOnly = !!viewJournal
+  // Posting refetches the list; show the fresh copy.
+  const current = viewJournal ? (journals.find(j => j.id === viewJournal.id) ?? viewJournal) : null
   const { fields, append, remove } = useFieldArray({ control, name: 'entries' })
   const watchEntries = watch('entries')
   const totalDebit  = watchEntries.reduce((s, e) => s + (Number(e.debit)  || 0), 0)
@@ -113,6 +133,7 @@ export default function JournalPage() {
         setValue('description', aiDesc)
         setValue('journal_type', activeType ?? 'general')
         setAiMode(false)
+        setViewJournal(null)
         setShowCreate(true)
       }
     } catch { setAiResult({ explanation: 'ไม่สามารถเชื่อมต่อ AI ได้', confidence: 0 }) }
@@ -122,8 +143,8 @@ export default function JournalPage() {
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
   const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 780, maxHeight: '92vh', overflowY: 'auto' }
 
-  // The form or a journal's detail replaces the list on the page.
-  const panelOpen = showCreate || !!viewJournal
+  // The journal card replaces the list on the page.
+  const panelOpen = showCreate
   const bookName = activeType ? TYPE_META[activeType].full : 'สมุดรายวัน'
 
   return (
@@ -140,7 +161,7 @@ export default function JournalPage() {
             style={{ background: '#F2714E15', border: '1px solid #F2714E40', color: '#F2714E', fontWeight: 700, fontSize: 12, borderRadius: 9, padding: '9px 16px', cursor: 'pointer' }}>
             🤖 AI แนะนำการลงบัญชี
           </button>
-          <button onClick={() => { setValue('journal_type', activeType ?? 'general'); setShowCreate(true); setAiResult(null) }}
+          <button onClick={openCreate}
             style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 20px', cursor: 'pointer' }}>
             + บันทึกรายการใหม่
           </button>
@@ -179,7 +200,7 @@ export default function JournalPage() {
               {journals.map(j => {
                 const sm = STATUS_META[j.status]
                 return (
-                  <tr key={j.id} onClick={() => setViewJournal(j)} style={{ cursor: 'pointer' }}>
+                  <tr key={j.id} onClick={() => openView(j)} style={{ cursor: 'pointer' }}>
                     <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontFamily: 'monospace', fontSize: 12, color: 'var(--color-accent-light)' }}>{j.number}</td>
                     <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, color: 'var(--color-text-secondary)' }}>{new Date(j.date).toLocaleDateString('th-TH')}</td>
                     <td style={{ padding: '12px 14px', borderBottom: '1px solid var(--color-border-subtle)' }}><TypeBadge type={j.journal_type} /></td>
@@ -252,11 +273,18 @@ export default function JournalPage() {
         </div>
       )}
 
-      {/* ── CREATE JOURNAL ── */}
+      {/* ── JOURNAL CARD — one layout for recording and viewing ── */}
       {showCreate && (
-          <DocCard title="บันทึกรายการสมุดรายวัน" subtitle="Double-Entry Bookkeeping"
-            onBack={() => setShowCreate(false)} backLabel={`กลับไปที่${bookName}`}>
+          <DocCard
+            title={current ? <span style={{ fontFamily: 'monospace' }}>{current.number}</span> : 'บันทึกรายการสมุดรายวัน'}
+            subtitle={current ? current.description : 'Double-Entry Bookkeeping'}
+            onBack={closeCard} backLabel={`กลับไปที่${bookName}`}
+            actions={current && <>
+              <TypeBadge type={current.journal_type} />
+              <span style={docBadge(STATUS_META[current.status].color)}>{STATUS_META[current.status].label}</span>
+            </>}>
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+              <fieldset disabled={readOnly} className={`doc-form${readOnly ? ' doc-ro' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>สมุดรายวัน</label>
                 <select {...register('journal_type')} style={{ ...inp, padding: '10px 12px', cursor: 'pointer' }}>
@@ -284,7 +312,7 @@ export default function JournalPage() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <label style={{ fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>รายการบัญชี (Double-Entry)</label>
-                  <button type="button" onClick={() => append({ account_id: '', debit: 0, credit: 0, description: '' })}
+                  <button type="button" className="doc-edit-only" onClick={() => append({ account_id: '', debit: 0, credit: 0, description: '' })}
                     style={{ fontSize: 11, background: 'var(--color-border)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-secondary)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer' }}>
                     + เพิ่มบรรทัด
                   </button>
@@ -320,7 +348,7 @@ export default function JournalPage() {
                           </td>
                           <td style={{ padding: '6px 8px', width: 32 }}>
                             {fields.length > 2 && (
-                              <button type="button" onClick={() => remove(i)} style={{ background: 'none', border: 'none', color: '#FF6B6B', cursor: 'pointer', fontSize: 14, padding: 2 }}>✕</button>
+                              <button type="button" className="doc-edit-only" onClick={() => remove(i)} style={{ background: 'none', border: 'none', color: '#FF6B6B', cursor: 'pointer', fontSize: 14, padding: 2 }}>✕</button>
                             )}
                           </td>
                         </tr>
@@ -342,71 +370,25 @@ export default function JournalPage() {
                 </div>
                 {errors.entries && <p style={{ margin: '6px 0 0', fontSize: 11, color: '#FF6B6B' }}>{(errors.entries as any).message || 'กรุณาตรวจสอบรายการ'}</p>}
               </div>
+              </fieldset>
 
               {createM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล</p></div>}
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button type="button" onClick={() => setShowCreate(false)} style={{ padding: '10px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
-                <button type="submit" disabled={createM.isPending || !balanced}
-                  style={{ background: balanced ? 'linear-gradient(135deg,#FF9E80,#F2714E)' : '#1A2A1A', color: balanced ? 'var(--color-bg)' : 'var(--color-dim)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 22px', cursor: balanced ? 'pointer' : 'not-allowed', opacity: createM.isPending ? 0.7 : 1 }}>
-                  {createM.isPending ? 'กำลังบันทึก...' : 'บันทึก Journal'}
-                </button>
+              <div style={docFooter}>
+                {current ? <>
+                  {current.status !== 'draft' && <span style={docLockedNote}>รายการนี้ลงบัญชีแล้ว</span>}
+                  {current.status === 'draft' && <button type="button" onClick={() => postM.mutate(current.id)} style={docPrimaryBtn('#43E97B', '#2FBF63')}>✓ Post Journal</button>}
+                </> : <>
+                  <button type="button" onClick={closeCard} style={docCancelBtn}>ยกเลิก</button>
+                  <button type="submit" disabled={createM.isPending || !balanced}
+                    style={{ ...docPrimaryBtn('#FF9E80', '#F2714E'), ...(balanced ? {} : { background: 'var(--color-bg-inset)', color: 'var(--color-dim)', cursor: 'not-allowed' }), opacity: createM.isPending ? 0.7 : 1 }}>
+                    {createM.isPending ? 'กำลังบันทึก...' : 'บันทึก Journal'}
+                  </button>
+                </>}
               </div>
             </form>
           </DocCard>
       )}
 
-      {/* ── JOURNAL DETAIL ── */}
-      {viewJournal && (
-          <DocCard title={<span style={{ fontFamily: 'monospace' }}>{viewJournal.number}</span>} subtitle={viewJournal.description}
-            onBack={() => setViewJournal(null)} backLabel={`กลับไปที่${bookName}`}
-            actions={<>
-              <TypeBadge type={viewJournal.journal_type} />
-              <span style={{ fontSize: 10, fontWeight: 700, color: STATUS_META[viewJournal.status].color, background: STATUS_META[viewJournal.status].color+'18', border: `1px solid ${STATUS_META[viewJournal.status].color}35`, padding: '3px 10px', borderRadius: 10 }}>
-                {STATUS_META[viewJournal.status].label}
-              </span>
-            </>}>
-            <div style={{ padding: 24 }}>
-              <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-bg-inset)', borderRadius: 10, overflow: 'hidden' }}>
-                <thead>
-                  <tr>
-                    {['บัญชี','Debit','Credit','คำอธิบาย'].map(h => (
-                      <th key={h} style={{ padding: '9px 14px', fontSize: 10, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', borderBottom: '1px solid var(--color-border)', textAlign: ['Debit','Credit'].includes(h) ? 'right' : 'left' }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {viewJournal.entries.map((e, i) => (
-                    <tr key={i}>
-                      <td style={{ padding: '10px 14px', fontSize: 12 }}>
-                        <span style={{ color: 'var(--color-accent-light)', fontFamily: 'monospace', marginRight: 6 }}>{e.account_code}</span>
-                        <span style={{ color: 'var(--color-text)' }}>{e.account_name}</span>
-                      </td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: Number(e.debit) > 0 ? '#43E97B' : 'var(--color-dim)', fontWeight: Number(e.debit) > 0 ? 700 : 400 }}>{Number(e.debit) > 0 ? Number(e.debit).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '—'}</td>
-                      <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontSize: 13, color: Number(e.credit) > 0 ? '#F093FB' : 'var(--color-dim)', fontWeight: Number(e.credit) > 0 ? 700 : 400 }}>{Number(e.credit) > 0 ? Number(e.credit).toLocaleString('th-TH', { minimumFractionDigits: 2 }) : '—'}</td>
-                      <td style={{ padding: '10px 14px', fontSize: 11, color: 'var(--color-text-tertiary)' }}>{e.description || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-                <tfoot>
-                  <tr style={{ background: 'var(--color-bg-inset)' }}>
-                    <td style={{ padding: '10px 14px', fontSize: 12, fontWeight: 700, color: 'var(--color-muted)' }}>รวม</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: '#43E97B' }}>{Number(viewJournal.total_debit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                    <td style={{ padding: '10px 14px', textAlign: 'right', fontFamily: 'monospace', fontWeight: 800, fontSize: 14, color: '#F093FB' }}>{Number(viewJournal.total_credit || 0).toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                    <td />
-                  </tr>
-                </tfoot>
-              </table>
-              {viewJournal.status === 'draft' && (
-                <div style={{ marginTop: 20, textAlign: 'right' }}>
-                  <button onClick={() => { postM.mutate(viewJournal.id); setViewJournal(null) }}
-                    style={{ background: '#43E97B', color: '#141018', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '11px 24px', cursor: 'pointer' }}>
-                    ✓ Post Journal
-                  </button>
-                </div>
-              )}
-            </div>
-          </DocCard>
-      )}
     </div>
   )
 }

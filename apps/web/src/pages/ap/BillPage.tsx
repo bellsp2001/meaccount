@@ -6,6 +6,7 @@ import { z } from 'zod'
 import api from '@/lib/api'
 import { DocumentBookSelect, useDocumentBooks } from '@/components/books/DocumentBookSelect'
 import DocCard from '@/components/doc/DocCard'
+import { docBadge, docActionBtn, docPrimaryBtn, docCancelBtn, docFooter, docLockedNote } from '@/components/doc/docStyles'
 
 interface Supplier     { id: string; code: string; name: string; payment_terms: number; wht_type?: string }
 interface ExpCategory  { id: string; code: string; name: string }
@@ -67,8 +68,10 @@ export default function BillPage() {
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
   const [showOCR, setShowOCR] = useState(false)
-  const [viewBill, setViewBill] = useState<Bill | null>(null)
-  const [editingBill, setEditingBill] = useState<Bill | null>(null)   // set while the form edits an existing bill
+  // One card serves create, view and edit: `openBill` is the bill shown (null = new),
+  // `readOnly` switches the same form layout between viewing and editing.
+  const [openBill, setOpenBill] = useState<Bill | null>(null)
+  const [readOnly, setReadOnly] = useState(false)
   const [showPay, setShowPay] = useState<Bill | null>(null)
   const [showApprove, setShowApprove] = useState<{ bill: Bill; action: 'approved'|'rejected' } | null>(null)
   const [aiDesc, setAiDesc] = useState('')
@@ -92,9 +95,9 @@ export default function BillPage() {
         ...d, supplier_id: d.supplier_id || undefined, category_id: d.category_id || undefined,
         due_date: d.due_date || undefined, book_id: d.book_id || undefined,
       }
-      return editingBill ? api.put(`/api/v1/ap/bills/${editingBill.id}`, body) : api.post('/api/v1/ap/bills', body)
+      return openBill ? api.put(`/api/v1/ap/bills/${openBill.id}`, body) : api.post('/api/v1/ap/bills', body)
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['bills'] }); closeForm() },
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['bills'] }); openView(r.data) },   // saved: show the bill
   })
   const submitM  = useMutation({ mutationFn: (id: string) => api.post(`/api/v1/ap/bills/${id}/submit`), onSuccess: () => qc.invalidateQueries({ queryKey: ['bills'] }) })
   const approveM = useMutation({
@@ -122,9 +125,15 @@ export default function BillPage() {
     resolver: zodResolver(billSchema),
     defaultValues: blankForm(),
   })
-  const openCreate = () => { setEditingBill(null); reset(blankForm()); createM.reset(); setShowCreate(true) }
-  const openEdit = (b: Bill) => { setViewBill(null); setEditingBill(b); reset(billForm(b)); createM.reset(); setShowCreate(true) }
-  const closeForm = () => { setShowCreate(false); setEditingBill(null) }
+  const openCard = (b: Bill | null, ro: boolean) => {
+    setOpenBill(b); reset(b ? billForm(b) : blankForm()); setReadOnly(ro); createM.reset(); setShowCreate(true)
+  }
+  const openCreate = () => openCard(null, false)
+  const openView = (b: Bill) => openCard(b, true)
+  const openEdit = (b: Bill) => openCard(b, false)
+  const closeForm = () => { setShowCreate(false); setOpenBill(null); setReadOnly(false) }
+  // Cancelling an edit goes back to viewing the bill; cancelling a new one goes back to the list.
+  const cancelForm = () => openBill ? openView(openBill) : closeForm()
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchItems = watch('items')
   // Not `|| 7`: a 0% bill must preview as 0, not fall back to 7.
@@ -185,7 +194,10 @@ export default function BillPage() {
   const pendingApproval = bills.filter(b => b.status === 'pending_approval').length
 
   // The form or a bill's detail replaces the list on the page.
-  const panelOpen = showCreate || !!viewBill
+  const panelOpen = showCreate
+  // Approval, posting and payments refetch the list; show the fresh copy.
+  const current = openBill ? (bills.find(b => b.id === openBill.id) ?? openBill) : null
+  const supplierMissing = current?.supplier && !suppliers.some(s => s.id === current.supplier_id)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -239,7 +251,7 @@ export default function BillPage() {
                 const sm = STATUS_META[bill.status] || STATUS_META.draft
                 const overdue = new Date(bill.due_date) < new Date() && !['paid','cancelled','rejected'].includes(bill.status)
                 return (
-                  <tr key={bill.id} onClick={() => setViewBill(bill)} style={{ cursor: 'pointer' }}>
+                  <tr key={bill.id} onClick={() => openView(bill)} style={{ cursor: 'pointer' }}>
                     <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontFamily: 'monospace', fontSize: 11, color: '#F093FB' }}>{bill.number}</td>
                     <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12 }}>{bill.supplier?.name || <span style={{ color: 'var(--color-dim)' }}>—</span>}</td>
                     <td style={{ padding: '11px 12px', borderBottom: '1px solid var(--color-border-subtle)', fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -348,11 +360,18 @@ export default function BillPage() {
         </div>
       )}
 
-      {/* ── CREATE / EDIT BILL ── */}
+      {/* ── BILL CARD — one layout for create, view and edit ── */}
       {showCreate && (
-          <DocCard title={editingBill ? `แก้ไขบิล ${editingBill.number}` : 'บันทึกค่าใช้จ่าย / Bill'} subtitle="บิล / ค่าใช้จ่าย"
-            onBack={closeForm} backLabel="กลับไปที่บิล / ค่าใช้จ่าย">
+          <DocCard
+            title={current ? `${readOnly ? '' : 'แก้ไข'}บิล ${current.number}` : 'บันทึกค่าใช้จ่าย / Bill'}
+            subtitle={current ? (current.supplier?.name || 'ไม่ระบุผู้จำหน่าย') : 'บิล / ค่าใช้จ่าย'}
+            onBack={closeForm} backLabel="กลับไปที่บิล / ค่าใช้จ่าย"
+            actions={current && <>
+              <span style={docBadge((STATUS_META[current.status] || STATUS_META.draft).color)}>{(STATUS_META[current.status] || STATUS_META.draft).label}</span>
+              {current.gl_posted && <span style={docBadge('#43E97B')}>✓ ลงบัญชีแล้ว</span>}
+            </>}>
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <fieldset disabled={readOnly} className={`doc-form${readOnly ? ' doc-ro' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
               <DocumentBookSelect side="expense" field={bookField} value={watch('book_id')} inputStyle={inp} labelStyle={lbl} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
@@ -360,6 +379,7 @@ export default function BillPage() {
                   <select {...register('supplier_id')} style={{ ...inp, cursor: 'pointer' }}>
                     <option value="">— ไม่ระบุ —</option>
                     {suppliers.map(s => <option key={s.id} value={s.id}>{s.code} — {s.name}</option>)}
+                    {supplierMissing && current?.supplier && <option value={current.supplier_id}>{current.supplier.code} — {current.supplier.name}</option>}
                   </select>
                 </div>
                 <div>
@@ -395,7 +415,7 @@ export default function BillPage() {
               <div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
                   <label style={{ ...lbl, margin: 0 }}>รายการ</label>
-                  <button type="button" onClick={() => append({ description: '', quantity: 1, unit_price: 0 })}
+                  <button type="button" className="doc-edit-only" onClick={() => append({ description: '', quantity: 1, unit_price: 0 })}
                     style={{ fontSize: 11, background: 'var(--color-border)', border: '1px solid var(--color-border-strong)', color: 'var(--color-text-secondary)', borderRadius: 7, padding: '4px 10px', cursor: 'pointer' }}>+ เพิ่มรายการ</button>
                 </div>
                 <div style={{ background: 'var(--color-bg-inset)', borderRadius: 10, overflow: 'hidden', border: '1px solid var(--color-border)' }}>
@@ -414,7 +434,7 @@ export default function BillPage() {
                             <td style={{ padding: '5px 6px', width: '10%' }}><input {...register(`items.${i}.unit`)} placeholder="ชิ้น" style={{ ...inp, fontSize: 11 }} /></td>
                             <td style={{ padding: '5px 6px', width: '18%' }}><input {...register(`items.${i}.unit_price`, { valueAsNumber: true })} type="number" min="0" step="0.01" style={{ ...inp, fontSize: 11, textAlign: 'right' }} /></td>
                             <td style={{ padding: '5px 6px', width: '16%', fontFamily: 'monospace', fontSize: 12, color: '#F093FB', textAlign: 'right', paddingRight: 10 }}>{amt.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</td>
-                            <td style={{ padding: '5px 6px', width: 28 }}>{fields.length > 1 && <button type="button" onClick={() => remove(i)} style={{ background: 'none', border: 'none', color: '#FF6B6B', cursor: 'pointer', fontSize: 13 }}>✕</button>}</td>
+                            <td style={{ padding: '5px 6px', width: 28 }}>{fields.length > 1 && <button type="button" className="doc-edit-only" onClick={() => remove(i)} style={{ background: 'none', border: 'none', color: '#FF6B6B', cursor: 'pointer', fontSize: 13 }}>✕</button>}</td>
                           </tr>
                         )
                       })}
@@ -439,63 +459,36 @@ export default function BillPage() {
                     <span style={{ fontSize: 13, fontWeight: 700 }}>ยอดที่ต้องจ่ายจริง</span>
                     <span style={{ fontSize: 16, fontWeight: 800, color: '#F093FB' }}>฿{netPayable.toLocaleString('th-TH', { minimumFractionDigits: 2 })}</span>
                   </div>
+                  {readOnly && current && Number(current.paid_amount) > 0 && <>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0 0', fontSize: 12 }}><span style={{ color: 'var(--color-text-tertiary)' }}>จ่ายแล้ว</span><span style={{ color: '#43E97B' }}>{baht(current.paid_amount)}</span></div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '2px 0 0', fontSize: 12 }}><span style={{ color: 'var(--color-text-tertiary)' }}>ค้างจ่าย</span><span style={{ color: '#FF6B6B', fontWeight: 700 }}>{baht(current.balance_due)}</span></div>
+                  </>}
                 </div>
               </div>
+
+              <div><label style={lbl}>หมายเหตุ</label><textarea {...register('note')} rows={2} style={{ ...inp, resize: 'vertical' }} placeholder="ข้อความเพิ่มเติม (ไม่บังคับ)" /></div>
+              </fieldset>
 
               {createM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>{typeof (createM.error as any)?.response?.data?.detail === 'string' ? (createM.error as any).response.data.detail : 'เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล'}</p></div>}
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
-                <button type="button" onClick={closeForm} style={{ padding: '9px 20px', borderRadius: 9, border: '1px solid var(--color-border-strong)', background: 'transparent', color: 'var(--color-text-tertiary)', cursor: 'pointer', fontWeight: 600, fontSize: 13 }}>ยกเลิก</button>
-                <button type="submit" disabled={createM.isPending} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '10px 24px', cursor: 'pointer', opacity: createM.isPending ? 0.7 : 1 }}>
-                  {createM.isPending ? 'กำลังบันทึก...' : editingBill ? '✓ บันทึกการแก้ไข' : '✓ บันทึกค่าใช้จ่าย'}
-                </button>
+              <div style={docFooter}>
+                {readOnly && current ? <>
+                  {!canEdit(current) && <span style={docLockedNote}>แก้ไขได้เฉพาะ Draft หรือที่ถูกปฏิเสธ และยังไม่ Post GL</span>}
+                  {current.status === 'draft' && <button type="button" onClick={() => submitM.mutate(current.id)} style={docActionBtn('#FFB59E')}>ส่งขออนุมัติ</button>}
+                  {current.status === 'pending_approval' && <>
+                    <button type="button" onClick={() => setShowApprove({ bill: current, action: 'rejected' })} style={docActionBtn('#FF6B6B')}>ปฏิเสธ</button>
+                    <button type="button" onClick={() => setShowApprove({ bill: current, action: 'approved' })} style={docActionBtn('#43E97B')}>อนุมัติ</button>
+                  </>}
+                  {current.status === 'approved' && !current.gl_posted && <button type="button" onClick={() => postM.mutate(current.id)} style={docActionBtn('#F5A623')}>Post GL</button>}
+                  {['approved', 'partial'].includes(current.status) && <button type="button" onClick={() => { setShowPay(current); setPayAmount(String(current.balance_due)); setPayMethod('bank_transfer'); setPayRef('') }} style={docActionBtn('#F093FB')}>จ่าย</button>}
+                  {canEdit(current) && <button type="button" onClick={() => openEdit(current)} style={docPrimaryBtn('#FF9E80', '#F2714E')}>✎ แก้ไข</button>}
+                </> : <>
+                  <button type="button" onClick={cancelForm} style={docCancelBtn}>ยกเลิก</button>
+                  <button type="submit" disabled={createM.isPending} style={{ ...docPrimaryBtn('#FF9E80', '#F2714E'), opacity: createM.isPending ? 0.7 : 1 }}>
+                    {createM.isPending ? 'กำลังบันทึก...' : current ? '✓ บันทึกการแก้ไข' : '✓ บันทึกค่าใช้จ่าย'}
+                  </button>
+                </>}
               </div>
             </form>
-          </DocCard>
-      )}
-
-      {/* ── BILL DETAIL ── */}
-      {viewBill && (
-          <DocCard title={<span style={{ fontFamily: 'monospace' }}>บิล {viewBill.number}</span>}
-            subtitle={`${viewBill.supplier?.name || 'ไม่ระบุผู้จำหน่าย'}${viewBill.ref_number ? ` · เลขที่ใบ ${viewBill.ref_number}` : ''}${viewBill.book ? ` · สมุด ${viewBill.book.code}` : ''}`}
-            onBack={() => setViewBill(null)} backLabel="กลับไปที่บิล / ค่าใช้จ่าย">
-            <div style={{ padding: 24 }}>
-              <p style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700 }}>{viewBill.description}</p>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 12, marginBottom: 16 }}>
-                {[
-                  ['วันที่', new Date(viewBill.date).toLocaleDateString('th-TH')],
-                  ['ครบกำหนด', new Date(viewBill.due_date).toLocaleDateString('th-TH')],
-                  ['หมวดหมู่', viewBill.category ? `${viewBill.category.code} ${viewBill.category.name}` : '—'],
-                  ['สถานะ', `${(STATUS_META[viewBill.status] || STATUS_META.draft).label}${viewBill.gl_posted ? ' · ✓ GL' : ''}`],
-                ].map(([l, v]) => (
-                  <div key={l}><p style={{ ...lbl, marginBottom: 3 }}>{l}</p><p style={{ margin: 0, fontSize: 13, fontWeight: 600 }}>{v}</p></div>
-                ))}
-              </div>
-              <table style={{ width: '100%', borderCollapse: 'collapse', marginBottom: 16 }}>
-                <thead><tr>{['รายการ', 'จำนวน', 'ราคา/หน่วย', 'รวม'].map(h => <th key={h} style={{ padding: '6px 8px', fontSize: 10, color: 'var(--color-dim)', textAlign: 'left', borderBottom: '1px solid var(--color-border)' }}>{h}</th>)}</tr></thead>
-                <tbody>{viewBill.items.map(it => (
-                  <tr key={it.id}>
-                    <td style={{ padding: '6px 8px', fontSize: 12, borderBottom: '1px solid var(--color-border-subtle)' }}>{it.description}</td>
-                    <td style={{ padding: '6px 8px', fontSize: 12, borderBottom: '1px solid var(--color-border-subtle)' }}>{Number(it.quantity)} {it.unit || ''}</td>
-                    <td style={{ padding: '6px 8px', fontSize: 12, borderBottom: '1px solid var(--color-border-subtle)', fontFamily: 'monospace' }}>{baht(it.unit_price)}</td>
-                    <td style={{ padding: '6px 8px', fontSize: 12, borderBottom: '1px solid var(--color-border-subtle)', fontFamily: 'monospace', textAlign: 'right' }}>{baht(it.amount)}</td>
-                  </tr>
-                ))}</tbody>
-              </table>
-              <div style={{ display: 'flex', justifyContent: 'flex-end', fontSize: 13 }}>
-                <div style={{ textAlign: 'right' }}>
-                  <p style={{ margin: '2px 0', color: 'var(--color-text-tertiary)' }}>ก่อน VAT: <b style={{ color: 'var(--color-text)' }}>{baht(viewBill.subtotal)}</b></p>
-                  <p style={{ margin: '2px 0', color: 'var(--color-text-tertiary)' }}>VAT {Number(viewBill.vat_rate)}%: <b style={{ color: '#F5A623' }}>{baht(viewBill.vat_amount)}</b></p>
-                  {Number(viewBill.wht_amount) > 0 && <p style={{ margin: '2px 0', color: 'var(--color-text-tertiary)' }}>หัก ณ ที่จ่าย {Number(viewBill.wht_rate)}%: <b style={{ color: '#FF6B6B' }}>-{baht(viewBill.wht_amount)}</b></p>}
-                  <p style={{ margin: '6px 0 0', fontSize: 16, fontWeight: 800, color: '#F093FB' }}>ยอดจ่ายจริง {baht(viewBill.net_payable)}</p>
-                  {Number(viewBill.paid_amount) > 0 && <p style={{ margin: '2px 0', fontSize: 12, color: 'var(--color-text-tertiary)' }}>จ่ายแล้ว {baht(viewBill.paid_amount)} · ค้าง {baht(viewBill.balance_due)}</p>}
-                </div>
-              </div>
-              {viewBill.note && <p style={{ marginTop: 14, fontSize: 12, color: 'var(--color-text-tertiary)' }}>📝 {viewBill.note}</p>}
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', alignItems: 'center', marginTop: 18, paddingTop: 16, borderTop: '1px solid var(--color-border)' }}>
-                {!canEdit(viewBill) && <span style={{ marginRight: 'auto', fontSize: 11, color: 'var(--color-dim)' }}>แก้ไขได้เฉพาะ Draft หรือที่ถูกปฏิเสธ และยังไม่ Post GL</span>}
-                {canEdit(viewBill) && <button onClick={() => openEdit(viewBill)} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 12, border: 'none', borderRadius: 9, padding: '9px 18px', cursor: 'pointer' }}>✎ แก้ไข</button>}
-              </div>
-            </div>
           </DocCard>
       )}
 
