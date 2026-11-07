@@ -7,6 +7,7 @@ import { z } from 'zod'
 import api from '@/lib/api'
 import { JOURNAL_TYPES, JOURNAL_TYPE_META, isJournalType, type JournalType } from '@/config/journals'
 import { JournalTypeBadge as TypeBadge } from '@/components/ui/JournalTypeBadge'
+import DocCard from '@/components/doc/DocCard'
 
 interface Account { id: string; code: string; name: string; account_type: string; normal_balance: string }
 interface JEntry  { id: string; account_id: string; account_code?: string; account_name?: string; debit: number; credit: number; description?: string }
@@ -121,8 +122,13 @@ export default function JournalPage() {
   const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
   const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 780, maxHeight: '92vh', overflowY: 'auto' }
 
+  // The form or a journal's detail replaces the list on the page.
+  const panelOpen = showCreate || !!viewJournal
+  const bookName = activeType ? TYPE_META[activeType].full : 'สมุดรายวัน'
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {!panelOpen && <>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
         <div>
@@ -202,6 +208,8 @@ export default function JournalPage() {
         )}
       </div>
 
+      </>}
+
       {/* ── AI MODAL ── */}
       {aiMode && (
         <div style={overlay} onClick={() => setAiMode(false)}>
@@ -244,14 +252,10 @@ export default function JournalPage() {
         </div>
       )}
 
-      {/* ── CREATE JOURNAL MODAL ── */}
+      {/* ── CREATE JOURNAL ── */}
       {showCreate && (
-        <div style={overlay} onClick={() => setShowCreate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>บันทึกรายการสมุดรายวัน</h3>
-              <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
-            </div>
+          <DocCard title="บันทึกรายการสมุดรายวัน" subtitle="Double-Entry Bookkeeping"
+            onBack={() => setShowCreate(false)} backLabel={`กลับไปที่${bookName}`}>
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>สมุดรายวัน</label>
@@ -348,27 +352,19 @@ export default function JournalPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </DocCard>
       )}
 
-      {/* ── VIEW JOURNAL DETAIL MODAL ── */}
+      {/* ── JOURNAL DETAIL ── */}
       {viewJournal && (
-        <div style={overlay} onClick={() => setViewJournal(null)}>
-          <div style={{ ...modal, maxWidth: 620 }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ margin: '0 0 3px', fontSize: 15, fontWeight: 800, fontFamily: 'monospace', color: 'var(--color-accent-light)' }}>{viewJournal.number}</h3>
-                <p style={{ margin: 0, fontSize: 12, color: 'var(--color-muted)' }}>{viewJournal.description}</p>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                <TypeBadge type={viewJournal.journal_type} />
-                <span style={{ fontSize: 10, fontWeight: 700, color: STATUS_META[viewJournal.status].color, background: STATUS_META[viewJournal.status].color+'18', border: `1px solid ${STATUS_META[viewJournal.status].color}35`, padding: '3px 10px', borderRadius: 10 }}>
-                  {STATUS_META[viewJournal.status].label}
-                </span>
-                <button onClick={() => setViewJournal(null)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
-              </div>
-            </div>
+          <DocCard title={<span style={{ fontFamily: 'monospace' }}>{viewJournal.number}</span>} subtitle={viewJournal.description}
+            onBack={() => setViewJournal(null)} backLabel={`กลับไปที่${bookName}`}
+            actions={<>
+              <TypeBadge type={viewJournal.journal_type} />
+              <span style={{ fontSize: 10, fontWeight: 700, color: STATUS_META[viewJournal.status].color, background: STATUS_META[viewJournal.status].color+'18', border: `1px solid ${STATUS_META[viewJournal.status].color}35`, padding: '3px 10px', borderRadius: 10 }}>
+                {STATUS_META[viewJournal.status].label}
+              </span>
+            </>}>
             <div style={{ padding: 24 }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', background: 'var(--color-bg-inset)', borderRadius: 10, overflow: 'hidden' }}>
                 <thead>
@@ -409,8 +405,7 @@ export default function JournalPage() {
                 </div>
               )}
             </div>
-          </div>
-        </div>
+          </DocCard>
       )}
     </div>
   )

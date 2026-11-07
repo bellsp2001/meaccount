@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
 import { openDocPdf } from '@/lib/pdf'
+import DocCard from '@/components/doc/DocCard'
 import { DocumentBookSelect, useDocumentBooks } from '@/components/books/DocumentBookSelect'
 
 interface Customer { id: string; code: string; name: string; credit_days: number }
@@ -158,8 +159,12 @@ export default function InvoicePage() {
   const totalUnpaid = invoices.filter(i=>['sent','partial','overdue'].includes(i.status)).reduce((s,i)=>s+Number(i.balance_due),0)
   const totalPaid   = invoices.filter(i=>i.status==='paid').reduce((s,i)=>s+Number(i.total),0)
 
+  // The form or an invoice's detail replaces the list on the page.
+  const panelOpen = showCreate || !!viewInv
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+      {!panelOpen && <>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12 }}>
         <div>
           <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>ใบแจ้งหนี้ (Invoice)</h2>
@@ -244,6 +249,8 @@ export default function InvoicePage() {
         )}
       </div>
 
+      </>}
+
       {/* ── OCR MODAL ── */}
       {showOCR && (
         <div style={overlay} onClick={()=>setShowOCR(false)}>
@@ -294,14 +301,10 @@ export default function InvoicePage() {
         </div>
       )}
 
-      {/* ── CREATE INVOICE MODAL ── */}
+      {/* ── CREATE / EDIT INVOICE ── */}
       {showCreate && (
-        <div style={overlay} onClick={closeForm}>
-          <div style={modal} onClick={e=>e.stopPropagation()}>
-            <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>{editingInv ? `แก้ไขใบแจ้งหนี้ ${editingInv.number}` : 'ออกใบแจ้งหนี้ใหม่'}</h3>
-              <button onClick={closeForm} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
-            </div>
+          <DocCard title={editingInv ? `แก้ไขใบแจ้งหนี้ ${editingInv.number}` : 'ออกใบแจ้งหนี้ใหม่'} subtitle="ใบแจ้งหนี้ (Invoice)"
+            onBack={closeForm} backLabel="กลับไปที่ใบแจ้งหนี้">
             <form onSubmit={subInv(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:18 }}>
               <DocumentBookSelect side="income" field={bookField} value={watchInv('book_id')} inputStyle={inp}
                 labelStyle={{ display:'block', fontSize:10, fontWeight:700, color:'var(--color-text-tertiary)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:6 }} />
@@ -401,21 +404,14 @@ export default function InvoicePage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </DocCard>
       )}
 
-      {/* ── VIEW INVOICE MODAL ── */}
+      {/* ── INVOICE DETAIL ── */}
       {viewInv && (
-        <div style={overlay} onClick={()=>setViewInv(null)}>
-          <div style={{ ...modal, maxWidth:680 }} onClick={e=>e.stopPropagation()}>
-            <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <div>
-                <h3 style={{ margin:0, fontSize:15, fontWeight:800, fontFamily:'monospace' }}>{viewInv.number}</h3>
-                <p style={{ margin:0, fontSize:11, color:'var(--color-muted)' }}>{viewInv.customer?.name || '—'}{viewInv.book ? ` · สมุด ${viewInv.book.code} ${viewInv.book.name}` : ''}</p>
-              </div>
-              <button onClick={()=>setViewInv(null)} aria-label="ปิด" style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
-            </div>
+          <DocCard title={<span style={{ fontFamily:'monospace' }}>ใบแจ้งหนี้ {viewInv.number}</span>}
+            subtitle={`${viewInv.customer?.name || '—'}${viewInv.book ? ` · สมุด ${viewInv.book.code} ${viewInv.book.name}` : ''}`}
+            onBack={()=>setViewInv(null)} backLabel="กลับไปที่ใบแจ้งหนี้">
             <div style={{ padding:24 }}>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:12, marginBottom:16 }}>
                 {[
@@ -456,8 +452,7 @@ export default function InvoicePage() {
                 {canEdit(viewInv) && <button onClick={()=>openEdit(viewInv)} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color:'var(--color-on-accent)', fontWeight:800, fontSize:12, border:'none', borderRadius:9, padding:'9px 18px', cursor:'pointer' }}>✎ แก้ไข</button>}
               </div>
             </div>
-          </div>
-        </div>
+          </DocCard>
       )}
 
       {/* ── RECEIVE PAYMENT MODAL ── */}

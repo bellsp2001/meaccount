@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
 import { openDocPdf } from '@/lib/pdf'
+import DocCard from '@/components/doc/DocCard'
 
 interface Customer { id: string; code?: string; name: string; tax_id?: string; address?: string; branch_code?: string }
 interface Item { id: string; description: string; quantity: number; unit?: string; unit_price: number; amount: number }
@@ -74,12 +75,12 @@ export default function TaxInvoicesPage() {
   const totalVat = invoices.reduce((s,i)=>s+Number(i.vat_amount),0)
   const totalSales = invoices.reduce((s,i)=>s+Number(i.subtotal),0)
 
-  const overlay: React.CSSProperties = { position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }
-  const modal: React.CSSProperties  = { background:'var(--color-card)', border:'1px solid var(--color-border-strong)', borderRadius:16, width:'100%', maxWidth:640, maxHeight:'92vh', overflowY:'auto' }
-  const modalWide: React.CSSProperties = { ...modal, maxWidth:820 }
+  // The form or a tax invoice's detail replaces the list on the page.
+  const panelOpen = showCreate || !!view
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+      {!panelOpen && <>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12 }}>
         <div>
           <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>ใบกำกับภาษี (Tax Invoice)</h2>
@@ -129,14 +130,12 @@ export default function TaxInvoicesPage() {
         )}
       </div>
 
-      {/* CREATE TAX INVOICE MODAL */}
+      </>}
+
+      {/* CREATE TAX INVOICE */}
       {showCreate && (
-        <div style={overlay} onClick={()=>setShowCreate(false)}>
-          <div style={modalWide} onClick={e=>e.stopPropagation()}>
-            <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <div><h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>ออกใบกำกับภาษี</h3><p style={{ margin:0, fontSize:11, color:'var(--color-muted)' }}>บันทึกใบแจ้งหนี้และลงบัญชี (Dr ลูกหนี้ / Cr รายได้ + VAT) อัตโนมัติ</p></div>
-              <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
-            </div>
+          <DocCard title="ออกใบกำกับภาษี" subtitle="บันทึกใบแจ้งหนี้และลงบัญชี (Dr ลูกหนี้ / Cr รายได้ + VAT) อัตโนมัติ"
+            onBack={()=>setShowCreate(false)} backLabel="กลับไปที่ใบกำกับภาษี">
             <form onSubmit={handleSubmit(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:18 }}>
               <div style={{ display:'grid', gridTemplateColumns:'2fr 1fr 1fr 1fr', gap:12 }}>
                 <div>
@@ -210,23 +209,14 @@ export default function TaxInvoicesPage() {
                 <button type="submit" disabled={createM.isPending} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color:'var(--color-on-accent)', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 24px', cursor:'pointer', opacity:createM.isPending?0.7:1 }}>{createM.isPending ? 'กำลังออกใบกำกับภาษี...' : '✓ ออกใบกำกับภาษี + ลงบัญชี'}</button>
               </div>
             </form>
-          </div>
-        </div>
+          </DocCard>
       )}
 
+      {/* TAX INVOICE DETAIL */}
       {view && (
-        <div style={overlay} onClick={()=>setView(null)}>
-          <div style={modal} onClick={e=>e.stopPropagation()}>
-            <div style={{ padding:'20px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'flex-start' }}>
-              <div>
-                <p style={{ margin:0, fontSize:11, color:'var(--color-muted)', letterSpacing:'0.1em' }}>ใบกำกับภาษี / TAX INVOICE</p>
-                <h3 style={{ margin:'2px 0 0', fontSize:16, fontWeight:800, fontFamily:'monospace' }}>{view.number}</h3>
-              </div>
-              <div style={{ display:'flex', gap:8, alignItems:'center' }}>
-                <button onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/tax-invoice/${view.id}`)} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color:'var(--color-on-accent)', fontWeight:700, fontSize:12, border:'none', borderRadius:8, padding:'7px 14px', cursor:'pointer' }}>🖨 พิมพ์ PDF</button>
-                <button onClick={()=>setView(null)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
-              </div>
-            </div>
+          <DocCard title={<span style={{ fontFamily:'monospace' }}>ใบกำกับภาษี {view.number}</span>} subtitle="ใบกำกับภาษี / TAX INVOICE"
+            onBack={()=>setView(null)} backLabel="กลับไปที่ใบกำกับภาษี"
+            actions={<button onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/tax-invoice/${view.id}`)} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color:'var(--color-on-accent)', fontWeight:700, fontSize:12, border:'none', borderRadius:8, padding:'7px 14px', cursor:'pointer' }}>🖨 พิมพ์ PDF</button>}>
             <div style={{ padding:24 }}>
               <div style={{ display:'flex', justifyContent:'space-between', flexWrap:'wrap', gap:12, marginBottom:16, fontSize:12 }}>
                 <div>
@@ -256,8 +246,7 @@ export default function TaxInvoicesPage() {
                 <p style={{ margin:'6px 0 0', fontSize:17, fontWeight:800, color:'var(--color-accent-light)' }}>รวมทั้งสิ้น ฿{Number(view.total).toLocaleString('th-TH',{minimumFractionDigits:2})}</p>
               </div>
             </div>
-          </div>
-        </div>
+          </DocCard>
       )}
     </div>
   )

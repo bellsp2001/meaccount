@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
 import { openDocPdf } from '@/lib/pdf'
+import DocCard from '@/components/doc/DocCard'
 
 // One page for every line-item document on both sides of the business:
 //   sales:    quotation → sales_order → invoice, deposit, credit_note, debit_note
@@ -182,16 +183,18 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
   const vatAmt = subtotal * watchVAT / 100; const total = subtotal + vatAmt
   const refOptions = adjustable.filter(r => !watchParty || (side === 'sales' ? r.customer_id : r.supplier_id) === watchParty)
 
-  const overlay: React.CSSProperties = { position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }
-  const modal: React.CSSProperties  = { background:'var(--color-card)', border:'1px solid var(--color-border-strong)', borderRadius:16, width:'100%', maxWidth:820, maxHeight:'92vh', overflowY:'auto' }
 
   const amountOf = (d: TradeDoc) => Number(isDeposit ? d.deposit_amount : d.total)
   const activeTotal = docs.filter(d=>!['cancelled','converted'].includes(d.status)).reduce((sum,d)=>sum+amountOf(d),0)
   const partyOf = (d: TradeDoc) => (side === 'sales' ? d.customer : d.supplier)?.name || '—'
   const refOf = (d: TradeDoc) => (side === 'sales' ? d.invoice : d.bill)?.number
 
+  // The form or a document's detail replaces the list on the page.
+  const panelOpen = showCreate || !!viewDoc
+
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+      {!panelOpen && <>
       <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12 }}>
         <div>
           <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>{cfg.title}</h2>
@@ -271,14 +274,12 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
         )}
       </div>
 
-      {/* CREATE MODAL */}
+      </>}
+
+      {/* CREATE / EDIT */}
       {showCreate && (
-        <div style={overlay} onClick={closeForm}>
-          <div style={modal} onClick={e=>e.stopPropagation()}>
-            <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>{editingDoc ? `แก้ไข${cfg.title.split(' /')[0]} ${editingDoc.number}` : cfg.createLabel.replace('+ ','')}</h3>
-              <button onClick={closeForm} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
-            </div>
+          <DocCard title={editingDoc ? `แก้ไข${cfg.title.split(' /')[0]} ${editingDoc.number}` : cfg.createLabel.replace('+ ','')}
+            subtitle={cfg.title} onBack={closeForm} backLabel={`กลับไปที่${cfg.title.split(' /')[0]}`}>
             <form onSubmit={handleSubmit(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:18 }}>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:12 }}>
                 <div style={{ gridColumn:'span 2' }}>
@@ -383,21 +384,14 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
                 <button type="submit" disabled={createM.isPending} style={{ background:`linear-gradient(135deg,${cfg.accent},${cfg.accent}CC)`, color:'#fff', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 24px', cursor:'pointer', opacity:createM.isPending?0.7:1 }}>{createM.isPending ? 'กำลังบันทึก...' : '✓ บันทึก'}</button>
               </div>
             </form>
-          </div>
-        </div>
+          </DocCard>
       )}
 
-      {/* VIEW MODAL */}
+      {/* DETAIL */}
       {viewDoc && (
-        <div style={overlay} onClick={()=>setViewDoc(null)}>
-          <div style={{ ...modal, maxWidth:640 }} onClick={e=>e.stopPropagation()}>
-            <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <div>
-                <h3 style={{ margin:0, fontSize:15, fontWeight:800, fontFamily:'monospace' }}>{viewDoc.number}</h3>
-                <p style={{ margin:0, fontSize:11, color:'var(--color-muted)' }}>{partyOf(viewDoc)}{viewDoc.ref_number ? ` · เลขที่ผู้จำหน่าย ${viewDoc.ref_number}` : ''}</p>
-              </div>
-              <button onClick={()=>setViewDoc(null)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
-            </div>
+          <DocCard title={<span style={{ fontFamily:'monospace' }}>{cfg.title.split(' /')[0]} {viewDoc.number}</span>}
+            subtitle={`${partyOf(viewDoc)}${viewDoc.ref_number ? ` · เลขที่ผู้จำหน่าย ${viewDoc.ref_number}` : ''}`}
+            onBack={()=>setViewDoc(null)} backLabel={`กลับไปที่${cfg.title.split(' /')[0]}`}>
             <div style={{ padding:24 }}>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:12, marginBottom:16 }}>
                 {[
@@ -442,8 +436,7 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
                 {canEdit(viewDoc) && <button onClick={()=>openEdit(viewDoc)} style={{ background:`linear-gradient(135deg,${cfg.accent},${cfg.accent}CC)`, color:'#fff', fontWeight:800, fontSize:12, border:'none', borderRadius:9, padding:'9px 18px', cursor:'pointer' }}>✎ แก้ไข</button>}
               </div>
             </div>
-          </div>
-        </div>
+          </DocCard>
       )}
     </div>
   )

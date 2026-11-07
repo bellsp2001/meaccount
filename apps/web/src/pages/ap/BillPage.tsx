@@ -5,6 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
 import { DocumentBookSelect, useDocumentBooks } from '@/components/books/DocumentBookSelect'
+import DocCard from '@/components/doc/DocCard'
 
 interface Supplier     { id: string; code: string; name: string; payment_terms: number; wht_type?: string }
 interface ExpCategory  { id: string; code: string; name: string }
@@ -183,8 +184,12 @@ export default function BillPage() {
   const totalPayable = bills.filter(b => ['approved','partial'].includes(b.status)).reduce((s, b) => s + Number(b.balance_due), 0)
   const pendingApproval = bills.filter(b => b.status === 'pending_approval').length
 
+  // The form or a bill's detail replaces the list on the page.
+  const panelOpen = showCreate || !!viewBill
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {!panelOpen && <>
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start' }}>
         <div>
@@ -285,6 +290,8 @@ export default function BillPage() {
         )}
       </div>
 
+      </>}
+
       {/* ── OCR + AI MODAL ── */}
       {showOCR && (
         <div style={overlay} onClick={() => setShowOCR(false)}>
@@ -310,7 +317,7 @@ export default function BillPage() {
                     <p style={{ margin: '0 0 8px', fontSize: 11, fontWeight: 700, color: '#F2714E' }}>✓ อ่านสำเร็จ (ข้อมูลถูกนำไปใส่ใน Form แล้ว)</p>
                     {ocrResult.supplier_name && <p style={{ margin: '2px 0', fontSize: 11, color: 'var(--color-text-secondary)' }}>ผู้ขาย: {ocrResult.supplier_name}</p>}
                     {ocrResult.total && <p style={{ margin: '2px 0', fontSize: 11, color: 'var(--color-text-secondary)' }}>ยอดรวม: ฿{Number(ocrResult.total).toLocaleString('th-TH')}</p>}
-                    <button onClick={() => setShowCreate(true)} style={{ marginTop: 10, background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 700, fontSize: 12, border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>
+                    <button onClick={() => { setShowOCR(false); setShowCreate(true) }} style={{ marginTop: 10, background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 700, fontSize: 12, border: 'none', borderRadius: 8, padding: '8px 16px', cursor: 'pointer' }}>
                       เปิด Form บันทึก →
                     </button>
                   </div>
@@ -341,14 +348,10 @@ export default function BillPage() {
         </div>
       )}
 
-      {/* ── CREATE BILL MODAL ── */}
+      {/* ── CREATE / EDIT BILL ── */}
       {showCreate && (
-        <div style={overlay} onClick={closeForm}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>{editingBill ? `แก้ไข ${editingBill.number}` : 'บันทึกค่าใช้จ่าย / Bill'}</h3>
-              <button onClick={closeForm} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
-            </div>
+          <DocCard title={editingBill ? `แก้ไขบิล ${editingBill.number}` : 'บันทึกค่าใช้จ่าย / Bill'} subtitle="บิล / ค่าใช้จ่าย"
+            onBack={closeForm} backLabel="กลับไปที่บิล / ค่าใช้จ่าย">
             <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
               <DocumentBookSelect side="expense" field={bookField} value={watch('book_id')} inputStyle={inp} labelStyle={lbl} />
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
@@ -447,23 +450,14 @@ export default function BillPage() {
                 </button>
               </div>
             </form>
-          </div>
-        </div>
+          </DocCard>
       )}
 
-      {/* ── VIEW BILL MODAL ── */}
+      {/* ── BILL DETAIL ── */}
       {viewBill && (
-        <div style={overlay} onClick={() => setViewBill(null)}>
-          <div style={{ ...modal, maxWidth: 680 }} onClick={e => e.stopPropagation()}>
-            <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800, fontFamily: 'monospace' }}>{viewBill.number}</h3>
-                <p style={{ margin: 0, fontSize: 11, color: 'var(--color-muted)' }}>
-                  {viewBill.supplier?.name || 'ไม่ระบุผู้จำหน่าย'}{viewBill.ref_number ? ` · เลขที่ใบ ${viewBill.ref_number}` : ''}{viewBill.book ? ` · สมุด ${viewBill.book.code}` : ''}
-                </p>
-              </div>
-              <button onClick={() => setViewBill(null)} aria-label="ปิด" style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
-            </div>
+          <DocCard title={<span style={{ fontFamily: 'monospace' }}>บิล {viewBill.number}</span>}
+            subtitle={`${viewBill.supplier?.name || 'ไม่ระบุผู้จำหน่าย'}${viewBill.ref_number ? ` · เลขที่ใบ ${viewBill.ref_number}` : ''}${viewBill.book ? ` · สมุด ${viewBill.book.code}` : ''}`}
+            onBack={() => setViewBill(null)} backLabel="กลับไปที่บิล / ค่าใช้จ่าย">
             <div style={{ padding: 24 }}>
               <p style={{ margin: '0 0 14px', fontSize: 14, fontWeight: 700 }}>{viewBill.description}</p>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(130px,1fr))', gap: 12, marginBottom: 16 }}>
@@ -502,8 +496,7 @@ export default function BillPage() {
                 {canEdit(viewBill) && <button onClick={() => openEdit(viewBill)} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 12, border: 'none', borderRadius: 9, padding: '9px 18px', cursor: 'pointer' }}>✎ แก้ไข</button>}
               </div>
             </div>
-          </div>
-        </div>
+          </DocCard>
       )}
 
       {/* ── APPROVE MODAL ── */}
