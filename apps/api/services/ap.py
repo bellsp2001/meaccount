@@ -14,6 +14,7 @@ from models.ap import (Supplier, Bill, BillItem, APPayment,
 from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.document_books import resolve_book
+from services.contacts import link_role, sync_from_role
 from schemas.ap import (SupplierCreate, SupplierUpdate,
                         BillCreate, APPaymentCreate, ApprovalAction)
 
@@ -52,7 +53,8 @@ def seed_default_categories(db: Session):
 # ── Supplier ───────────────────────────────────────────────────
 
 def get_suppliers(db: Session, search: Optional[str] = None) -> List[Supplier]:
-    q = db.query(Supplier).filter(Supplier.is_deleted == False)
+    # Inactive = the contact's supplier role was removed; keep it out of document pickers.
+    q = db.query(Supplier).filter(Supplier.is_deleted == False, Supplier.is_active == True)
     if search:
         q = q.filter(or_(
             Supplier.name.ilike(f"%{search}%"),
@@ -67,7 +69,9 @@ def create_supplier(db: Session, payload: SupplierCreate) -> Supplier:
                                   Supplier.is_deleted == False).first():
         raise HTTPException(400, f"รหัสผู้จำหน่าย {payload.code} มีอยู่แล้ว")
     s = Supplier(**payload.model_dump())
-    db.add(s); db.commit(); db.refresh(s)
+    db.add(s); db.flush()
+    link_role(db, s)
+    db.commit(); db.refresh(s)
     return s
 
 
@@ -77,6 +81,7 @@ def update_supplier(db: Session, sid: UUID, payload: SupplierUpdate) -> Supplier
         raise HTTPException(404, "ไม่พบผู้จำหน่าย")
     for k, v in payload.model_dump(exclude_none=True).items():
         setattr(s, k, v)
+    sync_from_role(db, s)
     db.commit(); db.refresh(s)
     return s
 

@@ -13,13 +13,15 @@ from models.ar import Customer, Invoice, InvoiceItem, Payment, InvoiceStatus, Pa
 from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.document_books import resolve_book
+from services.contacts import link_role, sync_from_role
 from schemas.ar import CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate
 
 
 # ── Customer ───────────────────────────────────────────────────
 
 def get_customers(db: Session, search: Optional[str] = None, skip=0, limit=50) -> List[Customer]:
-    q = db.query(Customer).filter(Customer.is_deleted == False)
+    # Inactive = the contact's customer role was removed; keep it out of document pickers.
+    q = db.query(Customer).filter(Customer.is_deleted == False, Customer.is_active == True)
     if search:
         q = q.filter(or_(
             Customer.name.ilike(f"%{search}%"),
@@ -33,7 +35,9 @@ def create_customer(db: Session, payload: CustomerCreate) -> Customer:
     if db.query(Customer).filter(Customer.code == payload.code, Customer.is_deleted == False).first():
         raise HTTPException(400, f"รหัสลูกค้า {payload.code} มีอยู่แล้ว")
     c = Customer(**payload.model_dump())
-    db.add(c); db.commit(); db.refresh(c)
+    db.add(c); db.flush()
+    link_role(db, c)
+    db.commit(); db.refresh(c)
     return c
 
 
@@ -43,6 +47,7 @@ def update_customer(db: Session, cid: UUID, payload: CustomerUpdate) -> Customer
         raise HTTPException(404, "ไม่พบลูกค้า")
     for k, v in payload.model_dump(exclude_none=True).items():
         setattr(c, k, v)
+    sync_from_role(db, c)
     db.commit(); db.refresh(c)
     return c
 

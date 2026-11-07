@@ -56,8 +56,11 @@ class Supplier(Base, UUIDMixin, TimestampMixin):
     bank_branch   = Column(String(100), nullable=True)
     wht_type      = Column(String(10),  nullable=True)
     is_active     = Column(Boolean,     default=True)
+    # The shared partner record (models.contact); this row is its supplier role.
+    contact_id    = Column(UUIDType(),  ForeignKey("contacts.id"), nullable=True, unique=True)
 
-    bills = relationship("Bill", back_populates="supplier", lazy="dynamic")
+    contact = relationship("Contact", back_populates="supplier")
+    bills   = relationship("Bill", back_populates="supplier", lazy="dynamic")
 
 
 class Bill(Base, UUIDMixin, TimestampMixin):

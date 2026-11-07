@@ -38,7 +38,10 @@ class Customer(Base, UUIDMixin, TimestampMixin):
     credit_days  = Column(Integer,       default=30, nullable=False)
     credit_limit = Column(Numeric(18,2), default=0,  nullable=False)
     is_active    = Column(Boolean,       default=True)
+    # The shared partner record (models.contact); this row is its customer role.
+    contact_id   = Column(UUIDType(),    ForeignKey("contacts.id"), nullable=True, unique=True)
 
+    contact  = relationship("Contact", back_populates="customer")
     invoices = relationship("Invoice", back_populates="customer", lazy="dynamic")
 
 
