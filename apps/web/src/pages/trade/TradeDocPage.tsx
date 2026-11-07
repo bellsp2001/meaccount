@@ -22,6 +22,7 @@ interface TradeDoc {
   subtotal: number; vat_rate: number; vat_amount: number; total: number; deposit_amount: number
   ref_number?: string; note?: string; reason?: string; gl_posted: boolean
   converted_to_type?: string
+  invoice_id?: string; bill_id?: string
   invoice?: { number: string }; bill?: { number: string }
   items: DocItem[]
 }
@@ -89,12 +90,17 @@ const lbl: React.CSSProperties = { display:'block', fontSize:10, fontWeight:700,
 const baht = (n: number) => `฿${Number(n).toLocaleString('th-TH',{minimumFractionDigits:2})}`
 const apiError = (e: unknown) => (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
 const errText = (e: unknown, fallback: string) => { const d = apiError(e); return typeof d === 'string' ? d : fallback }
+const thDate = (s?: string) => s ? new Date(s).toLocaleDateString('th-TH') : '—'
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
+// Editable until posted to GL, converted or cancelled (the API enforces the same rule).
+const canEdit = (d: TradeDoc) => ['draft','sent'].includes(d.status) && !d.gl_posted
 
 export default function TradeDocPage({ side, docType }: { side: Side; docType: DocType }) {
   const cfg = CFG[side][docType]!
   const s = SIDE[side]
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
+  const [editingDoc, setEditingDoc] = useState<TradeDoc|null>(null)   // set while the form edits an existing document
   const [viewDoc, setViewDoc] = useState<TradeDoc|null>(null)
   const [actionError, setActionError] = useState<string|null>(null)
   const isDeposit = docType === 'deposit'
@@ -127,13 +133,14 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
   const createM  = useMutation({
     mutationFn: (d: DForm) => {
       const { party_id, ref_id, ...rest } = d
-      return api.post(s.docs, {
+      const body = {
         doc_type: docType, ...rest, [s.partyKey]: party_id,
         ...(isNote ? { [s.refKey]: ref_id || undefined } : {}),
         valid_until: d.valid_until || undefined,
-      })
+      }
+      return editingDoc ? api.put(`${s.docs}/${editingDoc.id}`, body) : api.post(s.docs, body)
     },
-    onSuccess: () => { after()(); setShowCreate(false); reset() },
+    onSuccess: () => { after()(); closeForm() },
   })
   const sendM    = useMutation({ mutationFn: (id: string) => api.post(`${s.docs}/${id}/status`, null, { params: { status: 'sent' } }), onSuccess: after(), onError: onActionError })
   const convertM = useMutation({
@@ -147,10 +154,26 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
   })
   const cancelM  = useMutation({ mutationFn: (id: string) => api.post(`${s.docs}/${id}/cancel`), onSuccess: after(), onError: onActionError })
 
+  const blankForm = (): DForm => ({
+    party_id: '', ref_id: '', date: localToday(), valid_until: '', vat_rate: isDeposit ? 0 : 7, deposit_amount: 0,
+    ref_number: '', reason: '', note: '', items: [{ description:'', quantity:1, unit:'', unit_price:0, discount_pct:0 }],
+  })
+  const docForm = (d: TradeDoc): DForm => ({
+    party_id: (side === 'sales' ? d.customer : d.supplier)?.id ?? '',
+    ref_id: (side === 'sales' ? d.invoice_id : d.bill_id) ?? '',
+    date: d.date, valid_until: d.valid_until ?? '', vat_rate: Number(d.vat_rate), deposit_amount: Number(d.deposit_amount),
+    ref_number: d.ref_number ?? '', reason: d.reason ?? '', note: d.note ?? '',
+    items: d.items.map(it => ({ description: it.description, quantity: Number(it.quantity), unit: it.unit ?? '',
+                                unit_price: Number(it.unit_price), discount_pct: Number(it.discount_pct) })),
+  })
+
   const { register, handleSubmit, control, reset, watch, setValue, formState:{ errors } } = useForm<DForm>({
     resolver: zodResolver(docSchema),
-    defaultValues: { date: new Date().toISOString().split('T')[0], vat_rate: isDeposit ? 0 : 7, deposit_amount: 0, items: [{ description:'', quantity:1, unit_price:0, discount_pct:0 }] },
+    defaultValues: blankForm(),
   })
+  const openCreate = () => { setEditingDoc(null); reset(blankForm()); createM.reset(); setShowCreate(true) }
+  const openEdit = (d: TradeDoc) => { setViewDoc(null); setEditingDoc(d); reset(docForm(d)); createM.reset(); setShowCreate(true) }
+  const closeForm = () => { setShowCreate(false); setEditingDoc(null) }
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchItems = watch('items'); const vatInput = watch('vat_rate')
   const watchVAT = Number.isFinite(vatInput) ? vatInput : 0
@@ -174,7 +197,7 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
           <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>{cfg.title}</h2>
           <p style={{ margin:'3px 0 0', fontSize:12, color:'var(--color-muted)' }}>{cfg.subtitle} — ทั้งหมด {docs.length} ฉบับ</p>
         </div>
-        <button onClick={()=>setShowCreate(true)} style={{ background:`linear-gradient(135deg,${cfg.accent},${cfg.accent}CC)`, color:'#fff', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 20px', cursor:'pointer' }}>{cfg.createLabel}</button>
+        <button onClick={openCreate} style={{ background:`linear-gradient(135deg,${cfg.accent},${cfg.accent}CC)`, color:'#fff', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 20px', cursor:'pointer' }}>{cfg.createLabel}</button>
       </div>
 
       {/* KPI */}
@@ -232,7 +255,8 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
                     </td>
                     <td style={td} onClick={e=>e.stopPropagation()}>
                       <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
-                        {side === 'sales' && <button onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/sales-document/${d.id}`)} style={btn('#8E8E93')}>🖨 พิมพ์</button>}
+                        {canEdit(d) && <button onClick={()=>openEdit(d)} style={btn('#0A84FF')}>✎ แก้ไข</button>}
+                        {side === 'sales' &&<button onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/sales-document/${d.id}`)} style={btn('#8E8E93')}>🖨 พิมพ์</button>}
                         {d.status==='draft' && <button onClick={()=>sendM.mutate(d.id)} style={btn('#FFB59E')}>ส่ง</button>}
                         {cfg.convertLabel && !locked && <button onClick={()=>convertM.mutate(d.id)} style={btn('#64D2FF')}>{cfg.convertLabel}</button>}
                         {cfg.postLabel && !d.gl_posted && !locked && <button onClick={()=>postM.mutate(d.id)} style={btn('#43E97B')}>{cfg.postLabel}</button>}
@@ -249,11 +273,11 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
 
       {/* CREATE MODAL */}
       {showCreate && (
-        <div style={overlay} onClick={()=>setShowCreate(false)}>
+        <div style={overlay} onClick={closeForm}>
           <div style={modal} onClick={e=>e.stopPropagation()}>
             <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>{cfg.createLabel.replace('+ ','')}</h3>
-              <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
+              <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>{editingDoc ? `แก้ไข${cfg.title.split(' /')[0]} ${editingDoc.number}` : cfg.createLabel.replace('+ ','')}</h3>
+              <button onClick={closeForm} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
             </div>
             <form onSubmit={handleSubmit(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:18 }}>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:12 }}>
@@ -355,7 +379,7 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
 
               {createM.isError && <div style={{ background:'#FF6B6B12', border:'1px solid #FF6B6B35', borderRadius:8, padding:'10px 14px' }}><p style={{ margin:0, fontSize:12, color:'#FF6B6B' }}>{errText(createM.error, 'เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล')}</p></div>}
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-                <button type="button" onClick={()=>setShowCreate(false)} style={{ padding:'9px 20px', borderRadius:9, border:'1px solid var(--color-border-strong)', background:'transparent', color:'var(--color-text-tertiary)', cursor:'pointer', fontWeight:600, fontSize:13 }}>ยกเลิก</button>
+                <button type="button" onClick={closeForm} style={{ padding:'9px 20px', borderRadius:9, border:'1px solid var(--color-border-strong)', background:'transparent', color:'var(--color-text-tertiary)', cursor:'pointer', fontWeight:600, fontSize:13 }}>ยกเลิก</button>
                 <button type="submit" disabled={createM.isPending} style={{ background:`linear-gradient(135deg,${cfg.accent},${cfg.accent}CC)`, color:'#fff', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 24px', cursor:'pointer', opacity:createM.isPending?0.7:1 }}>{createM.isPending ? 'กำลังบันทึก...' : '✓ บันทึก'}</button>
               </div>
             </form>
@@ -375,6 +399,16 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
               <button onClick={()=>setViewDoc(null)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
             </div>
             <div style={{ padding:24 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:12, marginBottom:16 }}>
+                {[
+                  ['วันที่', thDate(viewDoc.date)],
+                  ...(!isNote ? [[cfg.validLabel, thDate(viewDoc.valid_until)]] : []),
+                  ['สถานะ', `${(STATUS_META[viewDoc.status] || STATUS_META.draft).label}${viewDoc.gl_posted ? ' · ✓ GL' : ''}`],
+                  ['VAT', `${Number(viewDoc.vat_rate)}%`],
+                ].map(([l, v]) => (
+                  <div key={l}><p style={{ ...lbl, marginBottom:3 }}>{l}</p><p style={{ margin:0, fontSize:13, fontWeight:600 }}>{v}</p></div>
+                ))}
+              </div>
               {isNote && (
                 <p style={{ margin:'0 0 14px', fontSize:12, color:'var(--color-text-tertiary)' }}>
                   อ้างอิง{s.refLabel} <b style={{ fontFamily:'monospace', color:'var(--color-accent-light)' }}>{refOf(viewDoc) || '—'}</b>
@@ -402,6 +436,11 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
               </div>
               {viewDoc.note && <p style={{ marginTop:14, fontSize:12, color:'var(--color-text-tertiary)' }}>📝 {viewDoc.note}</p>}
               {viewDoc.converted_to_type && <p style={{ marginTop:10, fontSize:11, color:'#64D2FF' }}>↪ แปลงเป็น{TARGET_LABEL[viewDoc.converted_to_type] || viewDoc.converted_to_type}แล้ว</p>}
+              <div style={{ display:'flex', gap:10, justifyContent:'flex-end', alignItems:'center', marginTop:18, paddingTop:16, borderTop:'1px solid var(--color-border)' }}>
+                {!canEdit(viewDoc) && <span style={{ marginRight:'auto', fontSize:11, color:'var(--color-dim)' }}>แก้ไขไม่ได้ — เอกสาร{viewDoc.gl_posted ? 'ลงบัญชีแล้ว' : 'ถูกแปลง/ยกเลิกแล้ว'}</span>}
+                {side === 'sales' && <button onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/sales-document/${viewDoc.id}`)} style={{ ...btn('#8E8E93'), fontSize:12, padding:'8px 14px' }}>🖨 พิมพ์</button>}
+                {canEdit(viewDoc) && <button onClick={()=>openEdit(viewDoc)} style={{ background:`linear-gradient(135deg,${cfg.accent},${cfg.accent}CC)`, color:'#fff', fontWeight:800, fontSize:12, border:'none', borderRadius:9, padding:'9px 18px', cursor:'pointer' }}>✎ แก้ไข</button>}
+              </div>
             </div>
           </div>
         </div>

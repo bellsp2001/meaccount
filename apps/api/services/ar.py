@@ -99,6 +99,32 @@ def create_invoice(db: Session, payload: InvoiceCreate, user_id: Optional[UUID] 
     return inv
 
 
+def update_invoice(db: Session, invoice_id: UUID, payload: InvoiceCreate) -> Invoice:
+    """Rewrite an invoice's header and items while it is not posted to GL and has no
+    payment. The number stays."""
+    inv = db.query(Invoice).filter(Invoice.id == invoice_id, Invoice.is_deleted == False).first()
+    if not inv:
+        raise HTTPException(404, "ไม่พบใบแจ้งหนี้")
+    if inv.gl_posted or inv.paid_amount or inv.status == InvoiceStatus.CANCELLED:
+        raise HTTPException(400, "แก้ไขได้เฉพาะใบแจ้งหนี้ที่ยังไม่ Post GL และยังไม่รับชำระ")
+    customer = db.query(Customer).filter(Customer.id == payload.customer_id).first()
+    if not customer:
+        raise HTTPException(404, "ไม่พบลูกค้า")
+    resolve_book(db, payload.book_id, BookSide.INCOME)
+
+    subtotal = sum(item.amount for item in payload.items)
+    vat_amount = (subtotal * payload.vat_rate / 100).quantize(Decimal("0.01"))
+    inv.customer_id, inv.date, inv.book_id, inv.note = payload.customer_id, payload.date, payload.book_id, payload.note
+    inv.due_date = payload.due_date or (payload.date + timedelta(days=customer.credit_days))
+    inv.vat_rate, inv.subtotal, inv.vat_amount = payload.vat_rate, subtotal, vat_amount
+    inv.total = inv.balance_due = subtotal + vat_amount
+    inv.items = [InvoiceItem(sequence=i, description=it.description, quantity=it.quantity, unit=it.unit,
+                             unit_price=it.unit_price, discount_pct=it.discount_pct, amount=it.amount)
+                 for i, it in enumerate(payload.items)]
+    db.commit(); db.refresh(inv)
+    return inv
+
+
 def post_invoice_to_gl(db: Session, invoice_id: UUID, user_id: Optional[UUID] = None) -> Invoice:
     """Post Invoice → Dr ลูกหนี้ / Cr รายได้ + VAT Output"""
     inv = db.query(Invoice).filter(Invoice.id == invoice_id).first()

@@ -14,9 +14,14 @@ interface Invoice {
   date: string; due_date: string; status: string
   subtotal: number; vat_rate: number; vat_amount: number; total: number
   paid_amount: number; balance_due: number; note?: string; gl_posted: boolean
-  book?: { code: string; name: string } | null
+  book_id?: string | null; book?: { code: string; name: string } | null
   items: InvoiceItem[]
 }
+
+// Editable until posted to GL, paid or cancelled (the API enforces the same rule).
+const canEdit = (inv: Invoice) => !inv.gl_posted && !Number(inv.paid_amount) && inv.status !== 'cancelled'
+const baht = (n: number) => `฿${Number(n).toLocaleString('th-TH',{minimumFractionDigits:2})}`
+const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}` }
 
 const STATUS_META: Record<string, { label: string; color: string }> = {
   draft:     { label: 'Draft',        color: '#F5A623' },
@@ -60,6 +65,7 @@ export default function InvoicePage() {
   const [showCreate, setShowCreate] = useState(false)
   const [showOCR, setShowOCR] = useState(false)
   const [viewInv, setViewInv] = useState<Invoice|null>(null)
+  const [editingInv, setEditingInv] = useState<Invoice|null>(null)   // set while the form edits an existing invoice
   const [showPay, setShowPay] = useState<Invoice|null>(null)
   const [ocrResult, setOcrResult] = useState<any>(null)
   const [ocrLoading, setOcrLoading] = useState(false)
@@ -74,8 +80,11 @@ export default function InvoicePage() {
   })
 
   const createM = useMutation({
-    mutationFn: (d: IForm) => api.post('/api/v1/ar/invoices', { ...d, due_date: d.due_date || undefined, book_id: d.book_id || undefined }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); setShowCreate(false); resetInv() },
+    mutationFn: (d: IForm) => {
+      const body = { ...d, due_date: d.due_date || undefined, book_id: d.book_id || undefined }
+      return editingInv ? api.put(`/api/v1/ar/invoices/${editingInv.id}`, body) : api.post('/api/v1/ar/invoices', body)
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); closeForm() },
   })
   const postM = useMutation({
     mutationFn: (id: string) => api.post(`/api/v1/ar/invoices/${id}/post-gl`),
@@ -91,10 +100,21 @@ export default function InvoicePage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['invoices'] }); setShowPay(null) },
   })
 
+  const blankForm = (): IForm => ({ customer_id: '', date: localToday(), due_date: '', vat_rate: 7, note: '', book_id: '',
+                                    items: [{ description:'', quantity:1, unit:'', unit_price:0, discount_pct:0 }] })
+  const invForm = (inv: Invoice): IForm => ({
+    customer_id: inv.customer_id, date: inv.date, due_date: inv.due_date, vat_rate: Number(inv.vat_rate),
+    note: inv.note ?? '', book_id: inv.book_id ?? '',
+    items: inv.items.map(it => ({ description: it.description, quantity: Number(it.quantity), unit: it.unit ?? '',
+                                  unit_price: Number(it.unit_price), discount_pct: Number(it.discount_pct) })),
+  })
   const { register: regInv, handleSubmit: subInv, control, reset: resetInv, watch: watchInv, setValue: setInv, formState: { errors: errInv } } = useForm<IForm>({
     resolver: zodResolver(invoiceSchema),
-    defaultValues: { date: new Date().toISOString().split('T')[0], vat_rate: 7, book_id: '', items: [{ description:'', quantity:1, unit_price:0, discount_pct:0 }] },
+    defaultValues: blankForm(),
   })
+  const openCreate = () => { setEditingInv(null); resetInv(blankForm()); createM.reset(); setShowCreate(true) }
+  const openEdit = (inv: Invoice) => { setViewInv(null); setEditingInv(inv); resetInv(invForm(inv)); createM.reset(); setShowCreate(true) }
+  const closeForm = () => { setShowCreate(false); setEditingInv(null) }
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const watchItems = watchInv('items')
   // Not `|| 7`: a 0% invoice (exempt / export) must preview as 0, not fall back to 7.
@@ -149,7 +169,7 @@ export default function InvoicePage() {
           <button onClick={()=>setShowOCR(true)} style={{ background:'#F2714E15', border:'1px solid #F2714E40', color:'#F2714E', fontWeight:700, fontSize:12, borderRadius:9, padding:'9px 16px', cursor:'pointer' }}>
             📄 OCR อ่านใบแจ้งหนี้
           </button>
-          <button onClick={()=>setShowCreate(true)} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 20px', cursor:'pointer' }}>
+          <button onClick={openCreate} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 20px', cursor:'pointer' }}>
             + ออกใบแจ้งหนี้
           </button>
         </div>
@@ -202,6 +222,7 @@ export default function InvoicePage() {
                     </td>
                     <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)' }} onClick={e=>e.stopPropagation()}>
                       <div style={{ display:'flex', gap:4 }}>
+                        {canEdit(inv) && <button onClick={()=>openEdit(inv)} style={{ fontSize:10, padding:'4px 8px', borderRadius:6, border:'1px solid #0A84FF40', background:'#0A84FF12', color:'#0A84FF', cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }}>✎ แก้ไข</button>}
                         <button onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/invoice/${inv.id}`)} style={{ fontSize:10, padding:'4px 8px', borderRadius:6, border:'1px solid #8E8E9340', background:'#8E8E9312', color:'var(--color-text-secondary)', cursor:'pointer', fontWeight:700 }}>🖨 พิมพ์</button>
                         {!inv.gl_posted && inv.status==='draft' && (
                           <button onClick={()=>postM.mutate(inv.id)} style={{ fontSize:10, padding:'4px 8px', borderRadius:6, border:'1px solid #FFB59E40', background:'#FFB59E12', color: 'var(--color-accent-light)', cursor:'pointer', fontWeight:700 }}>Post GL</button>
@@ -275,11 +296,11 @@ export default function InvoicePage() {
 
       {/* ── CREATE INVOICE MODAL ── */}
       {showCreate && (
-        <div style={overlay} onClick={()=>setShowCreate(false)}>
+        <div style={overlay} onClick={closeForm}>
           <div style={modal} onClick={e=>e.stopPropagation()}>
             <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
-              <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>ออกใบแจ้งหนี้ใหม่</h3>
-              <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
+              <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>{editingInv ? `แก้ไขใบแจ้งหนี้ ${editingInv.number}` : 'ออกใบแจ้งหนี้ใหม่'}</h3>
+              <button onClick={closeForm} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
             </div>
             <form onSubmit={subInv(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:18 }}>
               <DocumentBookSelect side="income" field={bookField} value={watchInv('book_id')} inputStyle={inp}
@@ -374,12 +395,67 @@ export default function InvoicePage() {
 
               {createM.isError && <div style={{ background:'#FF6B6B12', border:'1px solid #FF6B6B35', borderRadius:8, padding:'10px 14px' }}><p style={{ margin:0, fontSize:12, color:'#FF6B6B' }}>{typeof (createM.error as any)?.response?.data?.detail === 'string' ? (createM.error as any).response.data.detail : 'เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล'}</p></div>}
               <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
-                <button type="button" onClick={()=>setShowCreate(false)} style={{ padding:'9px 20px', borderRadius:9, border:'1px solid var(--color-border-strong)', background:'transparent', color:'var(--color-text-tertiary)', cursor:'pointer', fontWeight:600, fontSize:13 }}>ยกเลิก</button>
+                <button type="button" onClick={closeForm} style={{ padding:'9px 20px', borderRadius:9, border:'1px solid var(--color-border-strong)', background:'transparent', color:'var(--color-text-tertiary)', cursor:'pointer', fontWeight:600, fontSize:13 }}>ยกเลิก</button>
                 <button type="submit" disabled={createM.isPending} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 24px', cursor:'pointer', opacity:createM.isPending?0.7:1 }}>
-                  {createM.isPending ? 'กำลังออกใบแจ้งหนี้...' : '✓ ออกใบแจ้งหนี้'}
+                  {createM.isPending ? 'กำลังบันทึก...' : editingInv ? '✓ บันทึกการแก้ไข' : '✓ ออกใบแจ้งหนี้'}
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── VIEW INVOICE MODAL ── */}
+      {viewInv && (
+        <div style={overlay} onClick={()=>setViewInv(null)}>
+          <div style={{ ...modal, maxWidth:680 }} onClick={e=>e.stopPropagation()}>
+            <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div>
+                <h3 style={{ margin:0, fontSize:15, fontWeight:800, fontFamily:'monospace' }}>{viewInv.number}</h3>
+                <p style={{ margin:0, fontSize:11, color:'var(--color-muted)' }}>{viewInv.customer?.name || '—'}{viewInv.book ? ` · สมุด ${viewInv.book.code} ${viewInv.book.name}` : ''}</p>
+              </div>
+              <button onClick={()=>setViewInv(null)} aria-label="ปิด" style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
+            </div>
+            <div style={{ padding:24 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(130px,1fr))', gap:12, marginBottom:16 }}>
+                {[
+                  ['วันที่', new Date(viewInv.date).toLocaleDateString('th-TH')],
+                  ['ครบกำหนด', new Date(viewInv.due_date).toLocaleDateString('th-TH')],
+                  ['สถานะ', `${(STATUS_META[viewInv.status] || STATUS_META.draft).label}${viewInv.gl_posted ? ' · ✓ GL' : ''}`],
+                  ['ค้างชำระ', baht(viewInv.balance_due)],
+                ].map(([l, v]) => (
+                  <div key={l}>
+                    <p style={{ margin:'0 0 3px', fontSize:10, fontWeight:700, color:'var(--color-text-tertiary)', textTransform:'uppercase', letterSpacing:'0.1em' }}>{l}</p>
+                    <p style={{ margin:0, fontSize:13, fontWeight:600 }}>{v}</p>
+                  </div>
+                ))}
+              </div>
+              <table style={{ width:'100%', borderCollapse:'collapse', marginBottom:16 }}>
+                <thead><tr>{['รายการ','จำนวน','ราคา/หน่วย','ส่วนลด','รวม'].map(h=><th key={h} style={{ padding:'6px 8px', fontSize:10, color:'var(--color-dim)', textAlign:'left', borderBottom:'1px solid var(--color-border)' }}>{h}</th>)}</tr></thead>
+                <tbody>{viewInv.items.map(it=>(
+                  <tr key={it.id}>
+                    <td style={{ padding:'6px 8px', fontSize:12, borderBottom:'1px solid var(--color-border-subtle)' }}>{it.description}</td>
+                    <td style={{ padding:'6px 8px', fontSize:12, borderBottom:'1px solid var(--color-border-subtle)' }}>{Number(it.quantity)} {it.unit||''}</td>
+                    <td style={{ padding:'6px 8px', fontSize:12, borderBottom:'1px solid var(--color-border-subtle)', fontFamily:'monospace' }}>{baht(it.unit_price)}</td>
+                    <td style={{ padding:'6px 8px', fontSize:12, borderBottom:'1px solid var(--color-border-subtle)' }}>{Number(it.discount_pct) ? `${Number(it.discount_pct)}%` : '—'}</td>
+                    <td style={{ padding:'6px 8px', fontSize:12, borderBottom:'1px solid var(--color-border-subtle)', fontFamily:'monospace', textAlign:'right' }}>{baht(it.amount)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              <div style={{ display:'flex', justifyContent:'flex-end', fontSize:13 }}>
+                <div style={{ textAlign:'right' }}>
+                  <p style={{ margin:'2px 0', color:'var(--color-text-tertiary)' }}>ยอดก่อน VAT: <b style={{ color:'var(--color-text)' }}>{baht(viewInv.subtotal)}</b></p>
+                  <p style={{ margin:'2px 0', color:'var(--color-text-tertiary)' }}>VAT {Number(viewInv.vat_rate)}%: <b style={{ color:'#F5A623' }}>{baht(viewInv.vat_amount)}</b></p>
+                  <p style={{ margin:'6px 0 0', fontSize:16, fontWeight:800, color:'#F2714E' }}>รวม {baht(viewInv.total)}</p>
+                </div>
+              </div>
+              {viewInv.note && <p style={{ marginTop:14, fontSize:12, color:'var(--color-text-tertiary)' }}>📝 {viewInv.note}</p>}
+              <div style={{ display:'flex', gap:10, justifyContent:'flex-end', alignItems:'center', marginTop:18, paddingTop:16, borderTop:'1px solid var(--color-border)' }}>
+                {!canEdit(viewInv) && <span style={{ marginRight:'auto', fontSize:11, color:'var(--color-dim)' }}>แก้ไขไม่ได้ — ใบแจ้งหนี้{viewInv.status === 'cancelled' ? 'ถูกยกเลิก' : viewInv.gl_posted ? 'ลงบัญชีแล้ว' : 'รับชำระแล้ว'}</span>}
+                <button onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/invoice/${viewInv.id}`)} style={{ fontSize:12, padding:'8px 14px', borderRadius:9, border:'1px solid #8E8E9340', background:'#8E8E9312', color:'var(--color-text-secondary)', cursor:'pointer', fontWeight:700 }}>🖨 พิมพ์</button>
+                {canEdit(viewInv) && <button onClick={()=>openEdit(viewInv)} style={{ background:'linear-gradient(135deg,#FF9E80,#F2714E)', color:'var(--color-on-accent)', fontWeight:800, fontSize:12, border:'none', borderRadius:9, padding:'9px 18px', cursor:'pointer' }}>✎ แก้ไข</button>}
+              </div>
+            </div>
           </div>
         </div>
       )}

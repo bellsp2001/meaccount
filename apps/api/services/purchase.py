@@ -82,6 +82,37 @@ def create_purchase_document(db: Session, payload: PurchaseDocCreate, user_id: O
     return doc
 
 
+EDITABLE = (SalesDocStatus.DRAFT, SalesDocStatus.SENT)
+
+
+def update_purchase_document(db: Session, doc_id: UUID, payload: PurchaseDocCreate) -> PurchaseDocument:
+    """Rewrite a document's header and items. Only while it is a draft or sent and not
+    yet posted to GL; the number and type stay."""
+    doc = get_purchase_document(db, doc_id)
+    if doc.gl_posted or doc.status not in EDITABLE:
+        raise HTTPException(400, "แก้ไขได้เฉพาะเอกสารที่ยังไม่ Post GL และยังไม่ถูกแปลง/ยกเลิก")
+    if payload.doc_type != doc.doc_type:
+        raise HTTPException(400, "เปลี่ยนประเภทเอกสารไม่ได้")
+    if not db.query(Supplier).filter(Supplier.id == payload.supplier_id, Supplier.is_deleted == False).first():
+        raise HTTPException(404, "ไม่พบผู้จำหน่าย")
+    is_note = doc.doc_type in NOTE_TYPES
+    if is_note:
+        _posted_bill_for(db, payload.bill_id, payload.supplier_id)
+
+    doc.subtotal, doc.vat_amount, doc.total = _calc_totals(payload.items, payload.vat_rate)
+    doc.supplier_id, doc.date, doc.valid_until = payload.supplier_id, payload.date, payload.valid_until
+    doc.vat_rate, doc.ref_number, doc.note = payload.vat_rate, payload.ref_number, payload.note
+    if doc.doc_type == PurchaseDocType.DEPOSIT:
+        doc.deposit_amount = payload.deposit_amount
+    if is_note:
+        doc.bill_id, doc.reason = payload.bill_id, payload.reason
+    doc.items = [PurchaseDocumentItem(sequence=i, description=it.description, quantity=it.quantity, unit=it.unit,
+                                      unit_price=it.unit_price, discount_pct=it.discount_pct, amount=it.amount)
+                 for i, it in enumerate(payload.items)]
+    db.commit(); db.refresh(doc)
+    return doc
+
+
 def list_purchase_documents(db: Session, doc_type: PurchaseDocType,
                             status: Optional[SalesDocStatus] = None,
                             supplier_id: Optional[UUID] = None,
