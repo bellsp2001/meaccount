@@ -1,0 +1,415 @@
+import { useState } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useForm, useFieldArray } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
+import api from '@/lib/api'
+import { openDocPdf } from '@/lib/pdf'
+
+// One page for every line-item document on both sides of the business:
+//   sales:    quotation → sales_order → invoice, deposit, credit_note, debit_note
+//   purchase: rfq → purchase_order → bill,       deposit, credit_note, debit_note
+export type Side = 'sales' | 'purchase'
+export type DocType = 'quotation' | 'sales_order' | 'rfq' | 'purchase_order' | 'deposit' | 'credit_note' | 'debit_note'
+
+interface Party { id: string; code: string; name: string }
+interface RefDoc { id: string; number: string; status: string; gl_posted: boolean; total: number; balance_due: number; customer_id?: string; supplier_id?: string }
+interface DocItem { id: string; description: string; quantity: number; unit?: string; unit_price: number; discount_pct: number; amount: number }
+interface TradeDoc {
+  id: string; number: string; doc_type: DocType
+  customer?: Party; supplier?: Party
+  date: string; valid_until?: string; status: string
+  subtotal: number; vat_rate: number; vat_amount: number; total: number; deposit_amount: number
+  ref_number?: string; note?: string; reason?: string; gl_posted: boolean
+  converted_to_type?: string
+  invoice?: { number: string }; bill?: { number: string }
+  items: DocItem[]
+}
+
+interface DocCfg { title: string; subtitle: string; createLabel: string; validLabel: string; convertLabel?: string; postLabel?: string; accent: string }
+
+const CFG: Record<Side, Partial<Record<DocType, DocCfg>>> = {
+  sales: {
+    quotation:   { title: 'ใบเสนอราคา', subtitle: 'เสนอราคาสินค้า/บริการให้ลูกค้า', createLabel: '+ สร้างใบเสนอราคา', validLabel: 'ยืนราคาถึง', convertLabel: 'แปลงเป็นใบสั่งขาย', accent: '#0A84FF' },
+    sales_order: { title: 'ใบสั่งขาย / คำสั่งขาย', subtitle: 'ยืนยันคำสั่งซื้อจากลูกค้า', createLabel: '+ สร้างใบสั่งขาย', validLabel: 'กำหนดส่งของ', convertLabel: 'แปลงเป็นใบแจ้งหนี้', accent: '#5E5CE6' },
+    deposit:     { title: 'ใบรับมัดจำ', subtitle: 'รับเงินมัดจำล่วงหน้าจากลูกค้า', createLabel: '+ สร้างใบรับมัดจำ', validLabel: 'กำหนดชำระ', postLabel: 'รับมัดจำ (Post GL)', accent: '#FF9F0A' },
+    credit_note: { title: 'ใบลดหนี้', subtitle: 'ลดยอดใบแจ้งหนี้ที่ออกแล้ว เช่น คืนสินค้า ลดราคา', createLabel: '+ ออกใบลดหนี้', validLabel: 'อ้างอิง', postLabel: 'ออกใบลดหนี้ (Post GL)', accent: '#FF6B6B' },
+    debit_note:  { title: 'ใบเพิ่มหนี้', subtitle: 'เพิ่มยอดใบแจ้งหนี้ที่ออกแล้ว เช่น ส่งของเพิ่ม ปรับราคาขึ้น', createLabel: '+ ออกใบเพิ่มหนี้', validLabel: 'อ้างอิง', postLabel: 'ออกใบเพิ่มหนี้ (Post GL)', accent: '#30D158' },
+  },
+  purchase: {
+    rfq:            { title: 'ใบขอเสนอราคา', subtitle: 'ขอใบเสนอราคาจากผู้จำหน่าย', createLabel: '+ สร้างใบขอเสนอราคา', validLabel: 'ขอคำตอบภายใน', convertLabel: 'แปลงเป็นใบสั่งซื้อ', accent: '#0A84FF' },
+    purchase_order: { title: 'ใบสั่งซื้อ / คำสั่งซื้อ', subtitle: 'สั่งซื้อสินค้า/บริการจากผู้จำหน่าย', createLabel: '+ สร้างใบสั่งซื้อ', validLabel: 'กำหนดรับของ', convertLabel: 'แปลงเป็นใบแจ้งหนี้ (บิล)', accent: '#5E5CE6' },
+    deposit:        { title: 'ใบจ่ายมัดจำ', subtitle: 'จ่ายเงินมัดจำล่วงหน้าให้ผู้จำหน่าย', createLabel: '+ สร้างใบจ่ายมัดจำ', validLabel: 'กำหนดจ่าย', postLabel: 'จ่ายมัดจำ (Post GL)', accent: '#FF9F0A' },
+    credit_note:    { title: 'ใบลดหนี้', subtitle: 'ใบลดหนี้ที่ได้รับจากผู้จำหน่าย — ลดยอดบิลที่ต้องจ่าย', createLabel: '+ บันทึกใบลดหนี้', validLabel: 'อ้างอิง', postLabel: 'บันทึกบัญชี (Post GL)', accent: '#FF6B6B' },
+    debit_note:     { title: 'ใบเพิ่มหนี้', subtitle: 'ใบเพิ่มหนี้ที่ได้รับจากผู้จำหน่าย — เพิ่มยอดบิลที่ต้องจ่าย', createLabel: '+ บันทึกใบเพิ่มหนี้', validLabel: 'อ้างอิง', postLabel: 'บันทึกบัญชี (Post GL)', accent: '#30D158' },
+  },
+}
+
+const SIDE = {
+  sales:    { docs: '/api/v1/ar/sales-documents',    parties: '/api/v1/ar/customers', partyLabel: 'ลูกค้า', partyKey: 'customer_id' as const,
+              refs: '/api/v1/ar/invoices', refLabel: 'ใบแจ้งหนี้', refKey: 'invoice_id' as const, refQuery: 'invoices', targetQuery: 'invoices' },
+  purchase: { docs: '/api/v1/ap/purchase-documents', parties: '/api/v1/ap/suppliers', partyLabel: 'ผู้จำหน่าย', partyKey: 'supplier_id' as const,
+              refs: '/api/v1/ap/bills', refLabel: 'บิล', refKey: 'bill_id' as const, refQuery: 'bills', targetQuery: 'bills' },
+}
+
+const TARGET_LABEL: Record<string, string> = { sales_order: 'ใบสั่งขาย', invoice: 'ใบแจ้งหนี้', purchase_order: 'ใบสั่งซื้อ', bill: 'ใบแจ้งหนี้ (บิล)' }
+
+const STATUS_META: Record<string, { label: string; color: string }> = {
+  draft:     { label: 'Draft',      color: '#F5A623' },
+  sent:      { label: 'ส่งแล้ว',    color: 'var(--color-accent-light)' },
+  accepted:  { label: 'ยืนยันแล้ว', color: '#43E97B' },
+  converted: { label: 'แปลงแล้ว',   color: '#64D2FF' },
+  cancelled: { label: 'ยกเลิก',      color: 'var(--color-dim)' },
+  expired:   { label: 'หมดอายุ',    color: '#FF6B6B' },
+}
+
+const itemSchema = z.object({
+  description:  z.string().min(1, 'ระบุรายการ'),
+  quantity:     z.number().min(0.001),
+  unit:         z.string().optional(),
+  unit_price:   z.number().min(0),
+  discount_pct: z.number().min(0).max(100),
+})
+const docSchema = z.object({
+  party_id:       z.string().min(1, 'เลือกคู่ค้า'),
+  ref_id:         z.string().optional(),
+  date:           z.string().min(1),
+  valid_until:    z.string().optional(),
+  vat_rate:       z.number().min(0).max(100),
+  deposit_amount: z.number().min(0).optional(),
+  ref_number:     z.string().optional(),
+  reason:         z.string().optional(),
+  note:           z.string().optional(),
+  items:          z.array(itemSchema).min(1, 'ต้องมีอย่างน้อย 1 รายการ'),
+})
+type DForm = z.infer<typeof docSchema>
+
+const inp: React.CSSProperties = { background:'var(--color-bg-inset)', border:'1px solid var(--color-border)', borderRadius:8, padding:'8px 10px', fontSize:12, color:'var(--color-text)', outline:'none', width:'100%', boxSizing:'border-box' }
+const lbl: React.CSSProperties = { display:'block', fontSize:10, fontWeight:700, color:'var(--color-text-tertiary)', textTransform:'uppercase', letterSpacing:'0.1em', marginBottom:6 }
+const baht = (n: number) => `฿${Number(n).toLocaleString('th-TH',{minimumFractionDigits:2})}`
+const apiError = (e: unknown) => (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+const errText = (e: unknown, fallback: string) => { const d = apiError(e); return typeof d === 'string' ? d : fallback }
+
+export default function TradeDocPage({ side, docType }: { side: Side; docType: DocType }) {
+  const cfg = CFG[side][docType]!
+  const s = SIDE[side]
+  const qc = useQueryClient()
+  const [showCreate, setShowCreate] = useState(false)
+  const [viewDoc, setViewDoc] = useState<TradeDoc|null>(null)
+  const [actionError, setActionError] = useState<string|null>(null)
+  const isDeposit = docType === 'deposit'
+  const isNote = docType === 'credit_note' || docType === 'debit_note'
+  const queryKey = ['trade-docs', side, docType]
+
+  const { data: docs = [], isLoading } = useQuery<TradeDoc[]>({
+    queryKey,
+    queryFn: async () => (await api.get(s.docs, { params: { doc_type: docType } })).data,
+  })
+  const { data: parties = [] } = useQuery<Party[]>({
+    queryKey: [side === 'sales' ? 'customers' : 'suppliers'],
+    queryFn: async () => (await api.get(s.parties)).data,
+  })
+  const { data: refDocs = [] } = useQuery<RefDoc[]>({
+    queryKey: [s.refQuery],
+    queryFn: async () => (await api.get(s.refs)).data,
+    enabled: isNote,
+  })
+  // Only issued documents can be adjusted by a note.
+  const adjustable = refDocs.filter(r => r.gl_posted && !['cancelled','rejected'].includes(r.status))
+
+  const after = (extra?: string) => () => {
+    setActionError(null)
+    qc.invalidateQueries({ queryKey })
+    if (extra) qc.invalidateQueries({ queryKey: [extra] })
+  }
+  const onActionError = (e: unknown) => setActionError(errText(e, 'ทำรายการไม่สำเร็จ'))
+
+  const createM  = useMutation({
+    mutationFn: (d: DForm) => {
+      const { party_id, ref_id, ...rest } = d
+      return api.post(s.docs, {
+        doc_type: docType, ...rest, [s.partyKey]: party_id,
+        ...(isNote ? { [s.refKey]: ref_id || undefined } : {}),
+        valid_until: d.valid_until || undefined,
+      })
+    },
+    onSuccess: () => { after()(); setShowCreate(false); reset() },
+  })
+  const sendM    = useMutation({ mutationFn: (id: string) => api.post(`${s.docs}/${id}/status`, null, { params: { status: 'sent' } }), onSuccess: after(), onError: onActionError })
+  const convertM = useMutation({
+    mutationFn: (id: string) => api.post(`${s.docs}/${id}/convert`),
+    onSuccess: (r) => { after(s.targetQuery)(); qc.invalidateQueries({ queryKey: ['trade-docs', side] }); alert(`แปลงเอกสารสำเร็จ → ${r.data.target_number}`) },
+    onError: onActionError,
+  })
+  const postM    = useMutation({
+    mutationFn: (id: string) => api.post(`${s.docs}/${id}/${isDeposit ? 'post-deposit' : 'post-note'}`),
+    onSuccess: after(isNote ? s.refQuery : undefined), onError: onActionError,
+  })
+  const cancelM  = useMutation({ mutationFn: (id: string) => api.post(`${s.docs}/${id}/cancel`), onSuccess: after(), onError: onActionError })
+
+  const { register, handleSubmit, control, reset, watch, setValue, formState:{ errors } } = useForm<DForm>({
+    resolver: zodResolver(docSchema),
+    defaultValues: { date: new Date().toISOString().split('T')[0], vat_rate: isDeposit ? 0 : 7, deposit_amount: 0, items: [{ description:'', quantity:1, unit_price:0, discount_pct:0 }] },
+  })
+  const { fields, append, remove } = useFieldArray({ control, name: 'items' })
+  const watchItems = watch('items'); const vatInput = watch('vat_rate')
+  const watchVAT = Number.isFinite(vatInput) ? vatInput : 0
+  const watchParty = watch('party_id')
+  const subtotal = watchItems.reduce((sum, it) => sum + (Number(it.quantity)||0)*(Number(it.unit_price)||0)*(1-(Number(it.discount_pct)||0)/100), 0)
+  const vatAmt = subtotal * watchVAT / 100; const total = subtotal + vatAmt
+  const refOptions = adjustable.filter(r => !watchParty || (side === 'sales' ? r.customer_id : r.supplier_id) === watchParty)
+
+  const overlay: React.CSSProperties = { position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }
+  const modal: React.CSSProperties  = { background:'var(--color-card)', border:'1px solid var(--color-border-strong)', borderRadius:16, width:'100%', maxWidth:820, maxHeight:'92vh', overflowY:'auto' }
+
+  const amountOf = (d: TradeDoc) => Number(isDeposit ? d.deposit_amount : d.total)
+  const activeTotal = docs.filter(d=>!['cancelled','converted'].includes(d.status)).reduce((sum,d)=>sum+amountOf(d),0)
+  const partyOf = (d: TradeDoc) => (side === 'sales' ? d.customer : d.supplier)?.name || '—'
+  const refOf = (d: TradeDoc) => (side === 'sales' ? d.invoice : d.bill)?.number
+
+  return (
+    <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
+      <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:12 }}>
+        <div>
+          <h2 style={{ margin:0, fontSize:18, fontWeight:800 }}>{cfg.title}</h2>
+          <p style={{ margin:'3px 0 0', fontSize:12, color:'var(--color-muted)' }}>{cfg.subtitle} — ทั้งหมด {docs.length} ฉบับ</p>
+        </div>
+        <button onClick={()=>setShowCreate(true)} style={{ background:`linear-gradient(135deg,${cfg.accent},${cfg.accent}CC)`, color:'#fff', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 20px', cursor:'pointer' }}>{cfg.createLabel}</button>
+      </div>
+
+      {/* KPI */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(180px,1fr))', gap:12 }}>
+        {[
+          { l: isDeposit ? 'ยอดมัดจำที่ใช้งานอยู่' : 'มูลค่ารวม (ใช้งานอยู่)', v: baht(activeTotal), color: cfg.accent },
+          { l:'ฉบับร่าง', v: docs.filter(d=>d.status==='draft').length, color:'#F5A623' },
+          { l:'ส่งแล้ว', v: docs.filter(d=>d.status==='sent').length, color:'var(--color-accent-light)' },
+          { l: isDeposit || isNote ? 'ลงบัญชีแล้ว' : 'แปลงแล้ว', v: docs.filter(d=> isDeposit || isNote ? d.gl_posted : d.status==='converted').length, color:'#43E97B' },
+        ].map(k=>(
+          <div key={k.l} style={{ background:'var(--color-card)', border:`1px solid ${k.color}20`, borderTop:`2px solid ${k.color}`, borderRadius:12, padding:'14px 16px' }}>
+            <p style={{ margin:'0 0 4px', fontSize:10, color:'var(--color-muted)' }}>{k.l}</p>
+            <p style={{ margin:0, fontSize:20, fontWeight:800, color:k.color }}>{k.v}</p>
+          </div>
+        ))}
+      </div>
+
+      {actionError && (
+        <div role="alert" style={{ background:'#FF6B6B12', border:'1px solid #FF6B6B35', borderRadius:10, padding:'10px 14px', display:'flex', justifyContent:'space-between', gap:12 }}>
+          <span style={{ fontSize:12, color:'#FF6B6B' }}>{actionError}</span>
+          <button onClick={()=>setActionError(null)} style={{ background:'none', border:'none', color:'#FF6B6B', cursor:'pointer' }}>✕</button>
+        </div>
+      )}
+
+      {/* Table */}
+      <div style={{ background:'var(--color-card)', border:'1px solid var(--color-border)', borderRadius:14, overflow:'auto' }}>
+        {isLoading ? <div style={{ padding:48, textAlign:'center', color:'var(--color-dim)' }}>กำลังโหลด...</div>
+        : docs.length === 0 ? <div style={{ padding:56, textAlign:'center', color:'var(--color-dim)', fontSize:13 }}>ยังไม่มีเอกสาร — กด “{cfg.createLabel}” เพื่อเริ่ม</div>
+        : (
+          <table style={{ width:'100%', borderCollapse:'collapse' }}>
+            <thead>
+              <tr>
+                {['เลขที่', s.partyLabel, 'วันที่', isNote ? `อ้างอิง${s.refLabel}` : cfg.validLabel, isDeposit?'ยอดมัดจำ':'ยอดรวม','สถานะ','Actions'].map(h=>(
+                  <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontSize:9, fontWeight:700, color:'var(--color-dim)', textTransform:'uppercase', letterSpacing:'0.08em', borderBottom:'1px solid var(--color-border)' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {docs.map(d => {
+                const sm = STATUS_META[d.status] || STATUS_META.draft
+                const locked = ['converted','cancelled'].includes(d.status)
+                const td: React.CSSProperties = { padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)' }
+                return (
+                  <tr key={d.id} onClick={()=>setViewDoc(d)} style={{ cursor:'pointer' }}>
+                    <td style={{ ...td, fontFamily:'monospace', fontSize:12, color:'var(--color-accent-light)' }}>{d.number}</td>
+                    <td style={{ ...td, fontSize:12 }}>{partyOf(d)}</td>
+                    <td style={{ ...td, fontSize:11, color:'var(--color-text-tertiary)' }}>{new Date(d.date).toLocaleDateString('th-TH')}</td>
+                    <td style={{ ...td, fontSize:11, color:'var(--color-text-tertiary)', fontFamily: isNote ? 'monospace' : undefined }}>
+                      {isNote ? (refOf(d) || '—') : d.valid_until ? new Date(d.valid_until).toLocaleDateString('th-TH') : '—'}
+                    </td>
+                    <td style={{ ...td, fontSize:12, fontFamily:'monospace', fontWeight:600 }}>{baht(amountOf(d))}</td>
+                    <td style={td}>
+                      <span style={{ fontSize:10, fontWeight:700, color:sm.color, background:sm.color+'18', border:`1px solid ${sm.color}35`, padding:'2px 8px', borderRadius:10, whiteSpace:'nowrap' }}>{sm.label}</span>
+                      {d.gl_posted && <span style={{ fontSize:9, marginLeft:6, color:'#43E97B' }}>✓ GL</span>}
+                    </td>
+                    <td style={td} onClick={e=>e.stopPropagation()}>
+                      <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
+                        {side === 'sales' && <button onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/sales-document/${d.id}`)} style={btn('#8E8E93')}>🖨 พิมพ์</button>}
+                        {d.status==='draft' && <button onClick={()=>sendM.mutate(d.id)} style={btn('#FFB59E')}>ส่ง</button>}
+                        {cfg.convertLabel && !locked && <button onClick={()=>convertM.mutate(d.id)} style={btn('#64D2FF')}>{cfg.convertLabel}</button>}
+                        {cfg.postLabel && !d.gl_posted && !locked && <button onClick={()=>postM.mutate(d.id)} style={btn('#43E97B')}>{cfg.postLabel}</button>}
+                        {!locked && !d.gl_posted && <button onClick={()=>cancelM.mutate(d.id)} style={btn('#FF6B6B')}>ยกเลิก</button>}
+                      </div>
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* CREATE MODAL */}
+      {showCreate && (
+        <div style={overlay} onClick={()=>setShowCreate(false)}>
+          <div style={modal} onClick={e=>e.stopPropagation()}>
+            <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>{cfg.createLabel.replace('+ ','')}</h3>
+              <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
+            </div>
+            <form onSubmit={handleSubmit(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:18 }}>
+              <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(150px,1fr))', gap:12 }}>
+                <div style={{ gridColumn:'span 2' }}>
+                  <label style={lbl}>{s.partyLabel} *</label>
+                  <select {...register('party_id')} style={{ ...inp, cursor:'pointer' }}>
+                    <option value="">-- เลือก{s.partyLabel} --</option>
+                    {parties.map(p => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
+                  </select>
+                  {errors.party_id && <p style={{ margin:'3px 0 0', fontSize:10, color:'#FF6B6B' }}>{errors.party_id.message}</p>}
+                </div>
+                <div><label style={lbl}>วันที่</label><input {...register('date')} type="date" style={inp} /></div>
+                {!isNote && <div><label style={lbl}>{cfg.validLabel}</label><input {...register('valid_until')} type="date" style={inp} /></div>}
+                <div><label style={lbl}>VAT %</label><input {...register('vat_rate',{valueAsNumber:true})} type="number" min="0" max="100" style={inp} /></div>
+              </div>
+
+              {isNote && (
+                <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(220px,1fr))', gap:12 }}>
+                  <div>
+                    <label style={lbl}>อ้างอิง{s.refLabel} *</label>
+                    <select {...register('ref_id', { onChange: e => {
+                      const ref = adjustable.find(r => r.id === e.target.value)
+                      const owner = ref && (side === 'sales' ? ref.customer_id : ref.supplier_id)
+                      if (owner) setValue('party_id', owner)
+                    } })} style={{ ...inp, cursor:'pointer' }}>
+                      <option value="">-- เลือก{s.refLabel}ที่ลงบัญชีแล้ว --</option>
+                      {refOptions.map(r => <option key={r.id} value={r.id}>{r.number} — ยอด {baht(r.total)} (ค้าง {baht(r.balance_due)})</option>)}
+                    </select>
+                    {refOptions.length === 0 && <p style={{ margin:'4px 0 0', fontSize:10, color:'var(--color-dim)' }}>ไม่มี{s.refLabel}ที่ Post GL แล้ว{watchParty ? `ของ${s.partyLabel}นี้` : ''}</p>}
+                  </div>
+                  <div><label style={lbl}>เหตุผล</label><input {...register('reason')} placeholder={docType === 'credit_note' ? 'เช่น รับคืนสินค้า / ลดราคา' : 'เช่น ส่งสินค้าเพิ่ม / ปรับราคา'} style={inp} /></div>
+                </div>
+              )}
+
+              {side === 'purchase' && (
+                <div style={{ maxWidth:300 }}>
+                  <label style={lbl}>เลขที่เอกสารของผู้จำหน่าย</label>
+                  <input {...register('ref_number')} placeholder="ไม่บังคับ" style={inp} />
+                </div>
+              )}
+
+              {isDeposit && (
+                <div style={{ maxWidth:260 }}>
+                  <label style={lbl}>ยอดเงินมัดจำ (บาท) *</label>
+                  <input {...register('deposit_amount',{valueAsNumber:true})} type="number" min="0" step="0.01" style={{ ...inp, fontSize:15, fontWeight:700, color:cfg.accent }} />
+                </div>
+              )}
+
+              {/* Items */}
+              <div>
+                <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:10 }}>
+                  <label style={lbl}>{isNote ? 'รายการที่ปรับ' : 'รายการสินค้า/บริการ'}</label>
+                  <button type="button" onClick={()=>append({description:'',quantity:1,unit_price:0,discount_pct:0})} style={{ fontSize:11, background:'var(--color-border)', border:'1px solid var(--color-border-strong)', color:'var(--color-text-secondary)', borderRadius:7, padding:'4px 10px', cursor:'pointer' }}>+ เพิ่มรายการ</button>
+                </div>
+                <div style={{ background:'var(--color-bg-inset)', borderRadius:10, overflow:'auto', border:'1px solid var(--color-border)' }}>
+                  <table style={{ width:'100%', borderCollapse:'collapse', minWidth:560 }}>
+                    <thead><tr>{['รายละเอียด','จำนวน','หน่วย','ราคา/หน่วย','ส่วนลด%','จำนวนเงิน',''].map(h=>(
+                      <th key={h} style={{ padding:'7px 8px', fontSize:9, fontWeight:700, color:'var(--color-dim)', textTransform:'uppercase', borderBottom:'1px solid var(--color-border)', textAlign:'left' }}>{h}</th>))}
+                    </tr></thead>
+                    <tbody>
+                      {fields.map((field, i) => {
+                        const it = watchItems[i] || {}
+                        const amt = (Number(it.quantity)||0)*(Number(it.unit_price)||0)*(1-(Number(it.discount_pct)||0)/100)
+                        return (
+                          <tr key={field.id}>
+                            <td style={{ padding:'5px 6px', width:'32%' }}><input {...register(`items.${i}.description`)} placeholder="ชื่อสินค้า/บริการ" style={{ ...inp, fontSize:11 }}/></td>
+                            <td style={{ padding:'5px 6px', width:'10%' }}><input {...register(`items.${i}.quantity`,{valueAsNumber:true})} type="number" min="0" step="0.01" style={{ ...inp, fontSize:11 }}/></td>
+                            <td style={{ padding:'5px 6px', width:'9%' }}><input {...register(`items.${i}.unit`)} placeholder="ชิ้น" style={{ ...inp, fontSize:11 }}/></td>
+                            <td style={{ padding:'5px 6px', width:'15%' }}><input {...register(`items.${i}.unit_price`,{valueAsNumber:true})} type="number" min="0" step="0.01" style={{ ...inp, fontSize:11, textAlign:'right' }}/></td>
+                            <td style={{ padding:'5px 6px', width:'10%' }}><input {...register(`items.${i}.discount_pct`,{valueAsNumber:true})} type="number" min="0" max="100" step="0.01" style={{ ...inp, fontSize:11 }}/></td>
+                            <td style={{ padding:'5px 6px', width:'16%', fontFamily:'monospace', fontSize:12, color:'#43E97B', textAlign:'right', paddingRight:10 }}>{amt.toLocaleString('th-TH',{minimumFractionDigits:2})}</td>
+                            <td style={{ padding:'5px 6px', width:28 }}>{fields.length>1&&<button type="button" onClick={()=>remove(i)} style={{ background:'none', border:'none', color:'#FF6B6B', cursor:'pointer', fontSize:13 }}>✕</button>}</td>
+                          </tr>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                {errors.items && <p style={{ margin:'4px 0 0', fontSize:10, color:'#FF6B6B' }}>กรุณาตรวจสอบรายการ</p>}
+              </div>
+
+              {/* Totals */}
+              <div style={{ display:'flex', justifyContent:'flex-end' }}>
+                <div style={{ background:'var(--color-bg-inset)', border:'1px solid var(--color-border)', borderRadius:10, padding:'14px 20px', minWidth:240 }}>
+                  {[['ยอดก่อน VAT', baht(subtotal), 'var(--color-text)'],
+                    [`VAT ${watchVAT}%`, baht(vatAmt), '#F5A623']].map(([l,v,c])=>(
+                    <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:12 }}>
+                      <span style={{ color:'var(--color-text-tertiary)' }}>{l}</span><span style={{ color:c }}>{v}</span>
+                    </div>
+                  ))}
+                  <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0 0', borderTop:'1px solid var(--color-border-strong)', marginTop:4 }}>
+                    <span style={{ fontSize:13, fontWeight:700 }}>{isNote ? (docType === 'credit_note' ? 'ยอดลดหนี้' : 'ยอดเพิ่มหนี้') : 'ยอดรวมทั้งสิ้น'}</span>
+                    <span style={{ fontSize:16, fontWeight:800, color:cfg.accent }}>{baht(total)}</span>
+                  </div>
+                </div>
+              </div>
+
+              <div><label style={lbl}>หมายเหตุ</label><textarea {...register('note')} rows={2} style={{ ...inp, resize:'vertical' }} placeholder="ข้อความเพิ่มเติม (ไม่บังคับ)" /></div>
+
+              {createM.isError && <div style={{ background:'#FF6B6B12', border:'1px solid #FF6B6B35', borderRadius:8, padding:'10px 14px' }}><p style={{ margin:0, fontSize:12, color:'#FF6B6B' }}>{errText(createM.error, 'เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล')}</p></div>}
+              <div style={{ display:'flex', gap:10, justifyContent:'flex-end' }}>
+                <button type="button" onClick={()=>setShowCreate(false)} style={{ padding:'9px 20px', borderRadius:9, border:'1px solid var(--color-border-strong)', background:'transparent', color:'var(--color-text-tertiary)', cursor:'pointer', fontWeight:600, fontSize:13 }}>ยกเลิก</button>
+                <button type="submit" disabled={createM.isPending} style={{ background:`linear-gradient(135deg,${cfg.accent},${cfg.accent}CC)`, color:'#fff', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 24px', cursor:'pointer', opacity:createM.isPending?0.7:1 }}>{createM.isPending ? 'กำลังบันทึก...' : '✓ บันทึก'}</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* VIEW MODAL */}
+      {viewDoc && (
+        <div style={overlay} onClick={()=>setViewDoc(null)}>
+          <div style={{ ...modal, maxWidth:640 }} onClick={e=>e.stopPropagation()}>
+            <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
+              <div>
+                <h3 style={{ margin:0, fontSize:15, fontWeight:800, fontFamily:'monospace' }}>{viewDoc.number}</h3>
+                <p style={{ margin:0, fontSize:11, color:'var(--color-muted)' }}>{partyOf(viewDoc)}{viewDoc.ref_number ? ` · เลขที่ผู้จำหน่าย ${viewDoc.ref_number}` : ''}</p>
+              </div>
+              <button onClick={()=>setViewDoc(null)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
+            </div>
+            <div style={{ padding:24 }}>
+              {isNote && (
+                <p style={{ margin:'0 0 14px', fontSize:12, color:'var(--color-text-tertiary)' }}>
+                  อ้างอิง{s.refLabel} <b style={{ fontFamily:'monospace', color:'var(--color-accent-light)' }}>{refOf(viewDoc) || '—'}</b>
+                  {viewDoc.reason && <> · เหตุผล: {viewDoc.reason}</>}
+                </p>
+              )}
+              <table style={{ width:'100%', borderCollapse:'collapse', marginBottom:16 }}>
+                <thead><tr>{['รายการ','จำนวน','ราคา','รวม'].map(h=><th key={h} style={{ padding:'6px 8px', fontSize:10, color:'var(--color-dim)', textAlign:'left', borderBottom:'1px solid var(--color-border)' }}>{h}</th>)}</tr></thead>
+                <tbody>{viewDoc.items.map(it=>(
+                  <tr key={it.id}>
+                    <td style={{ padding:'6px 8px', fontSize:12, borderBottom:'1px solid var(--color-border-subtle)' }}>{it.description}</td>
+                    <td style={{ padding:'6px 8px', fontSize:12, borderBottom:'1px solid var(--color-border-subtle)' }}>{Number(it.quantity)} {it.unit||''}</td>
+                    <td style={{ padding:'6px 8px', fontSize:12, borderBottom:'1px solid var(--color-border-subtle)', fontFamily:'monospace' }}>฿{Number(it.unit_price).toLocaleString('th-TH')}</td>
+                    <td style={{ padding:'6px 8px', fontSize:12, borderBottom:'1px solid var(--color-border-subtle)', fontFamily:'monospace', textAlign:'right' }}>{baht(it.amount)}</td>
+                  </tr>
+                ))}</tbody>
+              </table>
+              <div style={{ display:'flex', justifyContent:'flex-end', fontSize:13 }}>
+                <div style={{ textAlign:'right' }}>
+                  <p style={{ margin:'2px 0', color:'var(--color-text-tertiary)' }}>ยอดก่อน VAT: <b style={{ color:'var(--color-text)' }}>{baht(viewDoc.subtotal)}</b></p>
+                  <p style={{ margin:'2px 0', color:'var(--color-text-tertiary)' }}>VAT: <b style={{ color:'#F5A623' }}>{baht(viewDoc.vat_amount)}</b></p>
+                  {isDeposit && <p style={{ margin:'2px 0', color:'var(--color-text-tertiary)' }}>เงินมัดจำ: <b style={{ color:cfg.accent }}>{baht(viewDoc.deposit_amount)}</b></p>}
+                  <p style={{ margin:'6px 0 0', fontSize:16, fontWeight:800, color:cfg.accent }}>รวม {baht(viewDoc.total)}</p>
+                </div>
+              </div>
+              {viewDoc.note && <p style={{ marginTop:14, fontSize:12, color:'var(--color-text-tertiary)' }}>📝 {viewDoc.note}</p>}
+              {viewDoc.converted_to_type && <p style={{ marginTop:10, fontSize:11, color:'#64D2FF' }}>↪ แปลงเป็น{TARGET_LABEL[viewDoc.converted_to_type] || viewDoc.converted_to_type}แล้ว</p>}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function btn(color: string): React.CSSProperties {
+  return { fontSize:10, padding:'4px 8px', borderRadius:6, border:`1px solid ${color}40`, background:`${color}12`, color, cursor:'pointer', fontWeight:700, whiteSpace:'nowrap' }
+}

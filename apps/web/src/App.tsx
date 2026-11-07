@@ -13,7 +13,11 @@ import TaxTypesPage from '@/pages/gl/TaxTypesPage'
 import DocumentBooksPage from '@/pages/books/DocumentBooksPage'
 import CustomersPage from '@/pages/ar/CustomersPage'
 import InvoicePage from '@/pages/ar/InvoicePage'
-import SalesDocPage from '@/pages/ar/SalesDocPage'
+import TradeDocPage from '@/pages/trade/TradeDocPage'
+import PurchaseTaxInvoicesPage from '@/pages/ap/PurchaseTaxInvoicesPage'
+import PaymentVouchersPage from '@/pages/ap/PaymentVouchersPage'
+import ExpenseReportPage from '@/pages/ap/ExpenseReportPage'
+import { TrialBalancePage, GeneralLedgerPage } from '@/pages/reports/LedgerReportPage'
 import TaxInvoicesPage from '@/pages/ar/TaxInvoicesPage'
 import ReceiptsPage from '@/pages/ar/ReceiptsPage'
 import SalesReportPage from '@/pages/ar/SalesReportPage'
@@ -81,6 +85,7 @@ function Soon({ name }: { name: string }) {
 const ACC: UserRole[] = ['admin', 'accountant']
 const AR_ROLES: UserRole[] = ['admin', 'accountant', 'cashier']
 const INV_ROLES: UserRole[] = ['admin', 'inventory', 'accountant']
+const REPORT_ROLES: UserRole[] = ['admin', 'accountant', 'manager', 'auditor']
 
 export default function App() {
   return (
@@ -97,16 +102,25 @@ export default function App() {
           <Route path="/gl/tax-types"     element={<RoleGuard roles={ACC}><TaxTypesPage /></RoleGuard>} />
           {/* AR */}
           <Route path="/ar"               element={<RoleGuard roles={AR_ROLES}><InvoicePage /></RoleGuard>} />
-          <Route path="/ar/quotations"    element={<RoleGuard roles={AR_ROLES}><SalesDocPage docType="quotation" /></RoleGuard>} />
-          <Route path="/ar/orders"        element={<RoleGuard roles={AR_ROLES}><SalesDocPage docType="sales_order" /></RoleGuard>} />
-          <Route path="/ar/deposits"      element={<RoleGuard roles={AR_ROLES}><SalesDocPage docType="deposit" /></RoleGuard>} />
+          {/* key per route: the same page component serves several document types */}
+          <Route path="/ar/quotations"    element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="s-qt" side="sales" docType="quotation" /></RoleGuard>} />
+          <Route path="/ar/orders"        element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="s-so" side="sales" docType="sales_order" /></RoleGuard>} />
+          <Route path="/ar/deposits"      element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="s-dep" side="sales" docType="deposit" /></RoleGuard>} />
+          <Route path="/ar/credit-notes"  element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="s-cn" side="sales" docType="credit_note" /></RoleGuard>} />
+          <Route path="/ar/debit-notes"   element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="s-dn" side="sales" docType="debit_note" /></RoleGuard>} />
           <Route path="/ar/tax-invoices"  element={<RoleGuard roles={AR_ROLES}><TaxInvoicesPage /></RoleGuard>} />
           <Route path="/ar/receipts"      element={<RoleGuard roles={AR_ROLES}><ReceiptsPage /></RoleGuard>} />
-          <Route path="/ar/reports"       element={<RoleGuard roles={AR_ROLES}><SalesReportPage /></RoleGuard>} />
           <Route path="/ar/customers"     element={<RoleGuard roles={AR_ROLES}><CustomersPage /></RoleGuard>} />
           <Route path="/ar/books"         element={<RoleGuard roles={ACC}><DocumentBooksPage key="income" side="income" /></RoleGuard>} />
           {/* AP */}
           <Route path="/ap"               element={<RoleGuard roles={AR_ROLES}><BillPage /></RoleGuard>} />
+          <Route path="/ap/rfq"           element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="p-rfq" side="purchase" docType="rfq" /></RoleGuard>} />
+          <Route path="/ap/orders"        element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="p-po" side="purchase" docType="purchase_order" /></RoleGuard>} />
+          <Route path="/ap/deposits"      element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="p-dep" side="purchase" docType="deposit" /></RoleGuard>} />
+          <Route path="/ap/credit-notes"  element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="p-cn" side="purchase" docType="credit_note" /></RoleGuard>} />
+          <Route path="/ap/debit-notes"   element={<RoleGuard roles={AR_ROLES}><TradeDocPage key="p-dn" side="purchase" docType="debit_note" /></RoleGuard>} />
+          <Route path="/ap/tax-invoices"  element={<RoleGuard roles={AR_ROLES}><PurchaseTaxInvoicesPage /></RoleGuard>} />
+          <Route path="/ap/payments"      element={<RoleGuard roles={AR_ROLES}><PaymentVouchersPage /></RoleGuard>} />
           <Route path="/ap/suppliers"     element={<RoleGuard roles={AR_ROLES}><SuppliersPage /></RoleGuard>} />
           <Route path="/ap/books"         element={<RoleGuard roles={ACC}><DocumentBooksPage key="expense" side="expense" /></RoleGuard>} />
           {/* Inventory — W13-14 */}
@@ -121,7 +135,15 @@ export default function App() {
           <Route path="/audit"    element={<RoleGuard roles={['admin','manager','auditor']}><AuditDashboardPage /></RoleGuard>} />
           <Route path="/fraud"    element={<RoleGuard roles={['admin','manager','auditor']}><RiskDashboardPage /></RoleGuard>} />
           <Route path="/analytics" element={<RoleGuard roles={['admin','accountant','manager']}><PredictiveAnalyticsPage /></RoleGuard>} />
-          <Route path="/ar/aging"         element={<RoleGuard roles={AR_ROLES}><AgingReportPage /></RoleGuard>} />
+          {/* Reports — sales/expense reports live under /reports; the old AR paths redirect */}
+          <Route path="/reports/trial-balance" element={<RoleGuard roles={REPORT_ROLES}><TrialBalancePage /></RoleGuard>} />
+          <Route path="/reports/ledger"        element={<RoleGuard roles={REPORT_ROLES}><GeneralLedgerPage /></RoleGuard>} />
+          <Route path="/reports/sales"         element={<RoleGuard roles={AR_ROLES}><SalesReportPage /></RoleGuard>} />
+          <Route path="/reports/ar-aging"      element={<RoleGuard roles={AR_ROLES}><AgingReportPage key="ar" side="receivable" /></RoleGuard>} />
+          <Route path="/reports/expenses"      element={<RoleGuard roles={AR_ROLES}><ExpenseReportPage /></RoleGuard>} />
+          <Route path="/reports/ap-aging"      element={<RoleGuard roles={AR_ROLES}><AgingReportPage key="ap" side="payable" /></RoleGuard>} />
+          <Route path="/ar/reports" element={<Navigate to="/reports/sales" replace />} />
+          <Route path="/ar/aging"   element={<Navigate to="/reports/ar-aging" replace />} />
           <Route path="/documents"       element={<RoleGuard roles={AR_ROLES}><DocumentCenterPage /></RoleGuard>} />
           <Route path="/documents/match" element={<RoleGuard roles={AR_ROLES}><ThreeWayMatchPage /></RoleGuard>} />
           <Route path="/developer/keys"         element={<RoleGuard roles={['admin']}><APIKeysPage /></RoleGuard>} />

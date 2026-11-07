@@ -86,11 +86,14 @@ export function Sidebar() {
               {hasChildren && (
                 <div className={`gsb-sub${expanded ? ' open' : ''}`}>
                   <ul>
-                    {item.children!.map(t => (
+                    {item.children!.flatMap((t, i, all) => [
+                      ...(t.section && t.section !== all[i - 1]?.section
+                        ? [<li key={`sec:${t.section}`} className="gsb-subsec" role="presentation">{t.section}</li>]
+                        : []),
                       <li key={t.to}>
                         <a href={t.to} onClick={go(t.to)} aria-current={activeSub?.to === t.to ? 'page' : undefined}>{t.label}</a>
-                      </li>
-                    ))}
+                      </li>,
+                    ])}
                   </ul>
                 </div>
               )}
@@ -181,6 +184,10 @@ const GSB_CSS = `
 .gsb-sub li:last-child { padding-bottom: 3px; }
 .gsb-menu .gsb-sub a { height: 32px; padding: 0 10px 0 14px; border-radius: 10px; font-size: 13px; color: var(--chrome-text-soft); }
 .gsb-menu .gsb-sub a:hover { color: var(--chrome-text); }
+/* Section heading: outdented past the items and set bold/dark so it reads as a divider, not a link. */
+.gsb-sub .gsb-subsec { margin-left: -8px; padding: 10px 10px 4px 4px; font-size: 11.5px; font-weight: 800; letter-spacing: .02em;
+  color: var(--chrome-text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gsb-sub .gsb-subsec:first-child { padding-top: 6px; }
 .gsb-menu .gsb-sub a[aria-current="page"] { color: var(--color-accent-strong); font-weight: 700; background: var(--chrome-hover); }
 :root:not([data-theme="light"]) .gsb-menu .gsb-sub a[aria-current="page"] { color: var(--color-accent-light); }
 @media (prefers-reduced-motion: reduce) { .gsb-sub, .gsb-menu svg.gsb-chev { transition: none; } }

@@ -26,7 +26,7 @@ export default function SalesReportPage() {
     queryFn: async () => (await api.get('/api/v1/ar/reports/sales', { params: { period_from: from, period_to: to } })).data,
   })
   const { data: aging } = useQuery<Aging>({
-    queryKey: ['aging'],
+    queryKey: ['aging', 'receivable'],
     queryFn: async () => (await api.get('/api/v1/ar/reports/aging')).data,
   })
 

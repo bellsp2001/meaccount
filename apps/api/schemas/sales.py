@@ -46,6 +46,8 @@ class SalesDocCreate(BaseModel):
     vat_rate:       Decimal = Decimal("7")
     deposit_amount: Decimal = Decimal("0")
     note:           Optional[str] = None
+    invoice_id:     Optional[UUID] = None   # credit/debit notes: the invoice being adjusted
+    reason:         Optional[str] = None
     items:          List[SalesItemCreate]
 
     @field_validator("items")
@@ -54,6 +56,13 @@ class SalesDocCreate(BaseModel):
         if len(v) < 1:
             raise ValueError("เอกสารต้องมีอย่างน้อย 1 รายการ")
         return v
+
+
+class DocRef(BaseModel):
+    """The adjusted invoice/bill as shown on a credit or debit note."""
+    id:     UUID
+    number: str
+    model_config = {"from_attributes": True}
 
 
 class SalesDocResponse(BaseModel):
@@ -75,6 +84,9 @@ class SalesDocResponse(BaseModel):
     converted_to_type: Optional[str]
     converted_to_id:   Optional[UUID]
     source_doc_id:     Optional[UUID]
+    invoice_id:     Optional[UUID] = None
+    invoice:        Optional[DocRef] = None
+    reason:         Optional[str] = None
     items:          List[SalesItemResponse] = []
     model_config = {"from_attributes": True}
 

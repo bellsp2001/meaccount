@@ -1,10 +1,12 @@
 """
-Sales module — pre-invoice sales documents (Quotation, Sales Order, Deposit).
+Sales module — sales documents around the invoice (Quotation, Sales Order, Deposit,
+Credit Note, Debit Note).
 
 These share one table (SalesDocument) with a `doc_type` discriminator because
 they carry identical structure (customer + line items + totals) and flow into
 one another: Quotation → Sales Order → Invoice. Deposits are standalone docs
-that post an advance-received liability to GL.
+that post an advance-received liability to GL. Credit/debit notes adjust an
+issued invoice (`invoice_id`) and post the adjustment to GL.
 
 The actual Invoice / Payment (Tax Invoice / Receipt) live in models.ar — those
 stay authoritative; this module only handles the documents that precede them.
@@ -21,6 +23,8 @@ class SalesDocType(str, enum.Enum):
     QUOTATION   = "quotation"      # ใบเสนอราคา
     SALES_ORDER = "sales_order"    # คำสั่งขาย
     DEPOSIT     = "deposit"        # ใบมัดจำ
+    CREDIT_NOTE = "credit_note"    # ใบลดหนี้
+    DEBIT_NOTE  = "debit_note"     # ใบเพิ่มหนี้
 
 
 class SalesDocStatus(str, enum.Enum):
@@ -53,9 +57,13 @@ class SalesDocument(Base, UUIDMixin, TimestampMixin):
     converted_to_type = Column(String(30), nullable=True)  # 'sales_order' | 'invoice'
     converted_to_id   = Column(UUIDType(), nullable=True)
     source_doc_id     = Column(UUIDType(), ForeignKey("sales_documents.id"), nullable=True)
+    # Credit/debit notes: the issued invoice being adjusted, and why
+    invoice_id     = Column(UUIDType(),    ForeignKey("invoices.id"), nullable=True, index=True)
+    reason         = Column(String(500),   nullable=True)
     created_by     = Column(UUIDType(),    ForeignKey("users.id"), nullable=True)
 
     customer   = relationship("Customer")
+    invoice    = relationship("Invoice", foreign_keys=[invoice_id])
     items      = relationship("SalesDocumentItem", back_populates="document",
                               cascade="all, delete-orphan", lazy="joined",
                               order_by="SalesDocumentItem.sequence")

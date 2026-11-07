@@ -461,6 +461,8 @@ _SALES_DOC_META = {
     SalesDocType.QUOTATION:   ("ใบเสนอราคา / QUOTATION", "ยืนราคาถึง"),
     SalesDocType.SALES_ORDER: ("คำสั่งขาย / SALES ORDER", "กำหนดส่งของ"),
     SalesDocType.DEPOSIT:     ("ใบมัดจำ / DEPOSIT", "กำหนดชำระ"),
+    SalesDocType.CREDIT_NOTE: ("ใบลดหนี้ / CREDIT NOTE", "มีผลถึง"),
+    SalesDocType.DEBIT_NOTE:  ("ใบเพิ่มหนี้ / DEBIT NOTE", "มีผลถึง"),
 }
 
 
