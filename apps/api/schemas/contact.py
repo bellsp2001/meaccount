@@ -21,7 +21,35 @@ class SupplierRoleIn(BaseModel):
     wht_type:      Optional[str] = None
 
 
+class ContactGroupCreate(BaseModel):
+    """`code` is generated (G0001…) when left out."""
+    code:        Optional[str] = None
+    name:        str
+    description: Optional[str] = None
+
+
+class ContactGroupUpdate(BaseModel):
+    code:        Optional[str] = None
+    name:        Optional[str] = None
+    description: Optional[str] = None
+    is_active:   Optional[bool] = None
+
+
+class ContactGroupRef(BaseModel):
+    id:   UUID
+    code: str
+    name: str
+    model_config = {"from_attributes": True}
+
+
+class ContactGroupResponse(ContactGroupRef):
+    description:   Optional[str]
+    is_active:     bool
+    contact_count: int = 0                     # active contacts in the group
+
+
 class ContactCreate(BaseModel):
+    group_id:     Optional[UUID] = None
     name:         str
     name_en:      Optional[str] = None
     tax_id:       Optional[str] = None
@@ -37,7 +65,8 @@ class ContactCreate(BaseModel):
 class ContactUpdate(BaseModel):
     """Shared fields to change, plus each role: settings to add/update it, or
     `remove_*` to switch it off. A removed role is deactivated, not deleted, so
-    its documents keep their customer/supplier."""
+    its documents keep their customer/supplier. Send `group_id: null` to clear the group."""
+    group_id:        Optional[UUID] = None
     name:            Optional[str] = None
     name_en:         Optional[str] = None
     tax_id:          Optional[str] = None
@@ -86,6 +115,8 @@ class ContactResponse(BaseModel):
     email:        Optional[str]
     contact_name: Optional[str]
     is_active:    bool
+    group_id:     Optional[UUID] = None
+    group:        Optional[ContactGroupRef] = None
     roles:        List[str] = []              # active roles: 'customer', 'supplier'
     customer:     Optional[CustomerRoleOut] = None
     supplier:     Optional[SupplierRoleOut] = None

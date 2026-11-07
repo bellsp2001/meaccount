@@ -10,13 +10,25 @@ invoices, bills and the rest are unaffected.
 The role tables still carry copies of the shared fields, because documents, PDFs and
 reports read them there. services.contacts keeps those copies in step with the contact.
 """
-from sqlalchemy import Column, String, Text, Boolean
+from sqlalchemy import Column, String, Text, Boolean, ForeignKey
 from sqlalchemy.orm import relationship
 from core.database import Base
-from models.base import UUIDMixin, TimestampMixin
+from models.base import UUIDMixin, TimestampMixin, UUIDType
 
 # Fields that belong to the contact and are mirrored onto its role rows.
 SHARED_FIELDS = ("name", "name_en", "tax_id", "branch_code", "address", "phone", "email", "contact_name")
+
+
+class ContactGroup(Base, UUIDMixin, TimestampMixin):
+    """A customer type group (wholesale, retail, VIP…) used to sort and filter contacts."""
+    __tablename__ = "contact_groups"
+
+    code        = Column(String(20),  nullable=False, unique=True, index=True)
+    name        = Column(String(255), nullable=False)
+    description = Column(Text,        nullable=True)
+    is_active   = Column(Boolean,     default=True)
+
+    contacts = relationship("Contact", back_populates="group")
 
 
 class Contact(Base, UUIDMixin, TimestampMixin):
@@ -32,6 +44,8 @@ class Contact(Base, UUIDMixin, TimestampMixin):
     email        = Column(String(255), nullable=True)
     contact_name = Column(String(255), nullable=True)
     is_active    = Column(Boolean,     default=True)
+    group_id     = Column(UUIDType(),  ForeignKey("contact_groups.id"), nullable=True, index=True)
 
+    group    = relationship("ContactGroup", back_populates="contacts")
     customer = relationship("Customer", back_populates="contact", uselist=False)
     supplier = relationship("Supplier", back_populates="contact", uselist=False)

@@ -12,6 +12,7 @@ import JournalPage from '@/pages/gl/JournalPage'
 import TaxTypesPage from '@/pages/gl/TaxTypesPage'
 import DocumentBooksPage from '@/pages/books/DocumentBooksPage'
 import ContactsPage from '@/pages/contacts/ContactsPage'
+import ContactGroupsPage from '@/pages/contacts/ContactGroupsPage'
 import InvoicePage from '@/pages/ar/InvoicePage'
 import TradeDocPage from '@/pages/trade/TradeDocPage'
 import PurchaseTaxInvoicesPage from '@/pages/ap/PurchaseTaxInvoicesPage'
@@ -113,6 +114,7 @@ export default function App() {
           <Route path="/contacts"           element={<RoleGuard roles={AR_ROLES}><ContactsPage key="all" /></RoleGuard>} />
           <Route path="/contacts/customers" element={<RoleGuard roles={AR_ROLES}><ContactsPage key="customer" role="customer" /></RoleGuard>} />
           <Route path="/contacts/suppliers" element={<RoleGuard roles={AR_ROLES}><ContactsPage key="supplier" role="supplier" /></RoleGuard>} />
+          <Route path="/contacts/groups"    element={<RoleGuard roles={AR_ROLES}><ContactGroupsPage /></RoleGuard>} />
           <Route path="/ar/customers" element={<Navigate to="/contacts/customers" replace />} />
           <Route path="/ap/suppliers" element={<Navigate to="/contacts/suppliers" replace />} />
           <Route path="/ar/books"         element={<RoleGuard roles={ACC}><DocumentBooksPage key="income" side="income" /></RoleGuard>} />

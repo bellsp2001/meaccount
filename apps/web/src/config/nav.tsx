@@ -39,9 +39,8 @@ export const NAV: NavItem[] = [
   {
     to: '/contacts', icon: 'contacts', label: 'ผู้ติดต่อ', roles: ['admin','accountant','cashier'],
     children: [
-      { to: '/contacts',           label: 'ทั้งหมด' },
-      { to: '/contacts/customers', label: 'ลูกค้า' },
-      { to: '/contacts/suppliers', label: 'ผู้จำหน่าย' },
+      { to: '/contacts',        label: 'รายชื่อผู้ติดต่อ' },
+      { to: '/contacts/groups', label: 'กลุ่มประเภทลูกค้า' },
     ],
   },
   {

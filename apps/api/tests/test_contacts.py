@@ -154,6 +154,43 @@ def test_backfill_links_existing_rows(db, client, h):
     assert backfill_contacts(db) == 0
 
 
+def test_groups_assign_filter_and_count(client, h):
+    g = client.post("/api/v1/contact-groups/", json={"name": "ขายส่ง"}, headers=h).json()
+    assert g["code"] == "G0001" and g["contact_count"] == 0
+    other = client.post("/api/v1/contact-groups/", json={"code": "vip", "name": "VIP"}, headers=h).json()
+    assert other["code"] == "VIP"
+    assert client.post("/api/v1/contact-groups/", json={"code": "VIP", "name": "ซ้ำ"}, headers=h).status_code == 400
+
+    a = _create(client, h, name="ร้าน ก", customer={}, group_id=g["id"]).json()
+    _create(client, h, name="ร้าน ข", customer={})
+    assert a["group"]["name"] == "ขายส่ง"
+    in_group = client.get("/api/v1/contacts/", params={"group_id": g["id"]}, headers=h).json()
+    assert [c["name"] for c in in_group] == ["ร้าน ก"]
+    counts = {x["code"]: x["contact_count"] for x in client.get("/api/v1/contact-groups/", headers=h).json()}
+    assert counts == {"G0001": 1, "VIP": 0}
+
+    # Moving, then clearing with an explicit null; leaving group_id out keeps it.
+    a = client.patch(f"/api/v1/contacts/{a['id']}", json={"group_id": other["id"]}, headers=h).json()
+    assert a["group"]["code"] == "VIP"
+    a = client.patch(f"/api/v1/contacts/{a['id']}", json={"phone": "02"}, headers=h).json()
+    assert a["group"]["code"] == "VIP"
+    a = client.patch(f"/api/v1/contacts/{a['id']}", json={"group_id": None}, headers=h).json()
+    assert a["group"] is None and a["group_id"] is None
+
+
+def test_group_in_use_cannot_be_deleted(client, h):
+    g = client.post("/api/v1/contact-groups/", json={"name": "ขายปลีก"}, headers=h).json()
+    c = _create(client, h, name="ร้าน ก", customer={}, group_id=g["id"]).json()
+    assert client.delete(f"/api/v1/contact-groups/{g['id']}", headers=h).status_code == 400
+    # Deactivating is allowed while in use.
+    assert client.patch(f"/api/v1/contact-groups/{g['id']}", json={"is_active": False}, headers=h).json()["is_active"] is False
+
+    client.patch(f"/api/v1/contacts/{c['id']}", json={"group_id": None}, headers=h)
+    assert client.delete(f"/api/v1/contact-groups/{g['id']}", headers=h).status_code == 200
+    assert client.get("/api/v1/contact-groups/", headers=h).json() == []
+    assert _create(client, h, name="ร้าน ข", customer={}, group_id=g["id"]).status_code == 400
+
+
 def test_open_balances(client, h, db):
     from models.accounting import Account, AccountTypeEnum, NormalBalance
     for code, t, nb in (("1201", AccountTypeEnum.ASSET, NormalBalance.DEBIT), ("4101", AccountTypeEnum.INCOME, NormalBalance.CREDIT),

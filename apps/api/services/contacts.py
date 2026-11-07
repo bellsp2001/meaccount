@@ -8,6 +8,8 @@ Rules:
     rewritten from the contact whenever either side changes.
   * Removing a role deactivates the role row instead of deleting it, so documents that
     point at it stay intact. Adding the role back reactivates the same row.
+  * A contact may belong to one customer type group. A group still holding contacts
+    can't be deleted, only deactivated.
 """
 import re
 from decimal import Decimal
@@ -17,10 +19,12 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 from fastapi import HTTPException
 
-from models.contact import Contact, SHARED_FIELDS
+from models.contact import Contact, ContactGroup, SHARED_FIELDS
 from models.ar import Customer, Invoice, InvoiceStatus
 from models.ap import Supplier, Bill, BillStatus
-from schemas.contact import ContactCreate, ContactUpdate, CustomerRoleIn, SupplierRoleIn
+from schemas.contact import (
+    ContactCreate, ContactUpdate, CustomerRoleIn, SupplierRoleIn, ContactGroupCreate, ContactGroupUpdate,
+)
 
 Role = Union[Customer, Supplier]
 DEFAULT_BRANCH = "00000"
@@ -133,8 +137,10 @@ def _open_balances(db: Session, contacts: List[Contact]):
 def to_response(c: Contact, receivable=Decimal("0"), payable=Decimal("0")) -> dict:
     cust = c.customer if c.customer and c.customer.is_active and not c.customer.is_deleted else None
     sup  = c.supplier if c.supplier and c.supplier.is_active and not c.supplier.is_deleted else None
+    group = c.group if c.group and not c.group.is_deleted else None
     return {
         **{f: getattr(c, f) for f in ("id", "code", "is_active") + SHARED_FIELDS},
+        "group_id": group.id if group else None, "group": group,
         "roles": [r for r, obj in (("customer", cust), ("supplier", sup)) if obj],
         "customer": cust, "supplier": sup,
         "receivable": receivable, "payable": payable,
@@ -142,11 +148,13 @@ def to_response(c: Contact, receivable=Decimal("0"), payable=Decimal("0")) -> di
 
 
 def list_contacts(db: Session, role: Optional[str] = None, search: Optional[str] = None,
-                  include_inactive: bool = False) -> List[dict]:
+                  include_inactive: bool = False, group_id: Optional[UUID] = None) -> List[dict]:
     backfill_contacts(db)   # picks up rows created outside this service (seed scripts, imports)
     q = db.query(Contact).filter(Contact.is_deleted == False)
     if not include_inactive:
         q = q.filter(Contact.is_active == True)
+    if group_id:
+        q = q.filter(Contact.group_id == group_id)
     if search:
         s = f"%{search.strip()}%"
         q = q.filter(Contact.name.ilike(s) | Contact.code.ilike(s) | Contact.tax_id.ilike(s) | Contact.name_en.ilike(s))
@@ -207,11 +215,17 @@ def _set_supplier(db: Session, c: Contact, data: SupplierRoleIn):
     _copy_shared(c, role)
 
 
+def _check_group(db: Session, group_id: Optional[UUID]):
+    if group_id and not db.query(ContactGroup).filter(ContactGroup.id == group_id, ContactGroup.is_deleted == False).first():
+        raise HTTPException(400, "ไม่พบกลุ่มประเภทลูกค้าที่เลือก")
+
+
 def create_contact(db: Session, payload: ContactCreate) -> Contact:
     if not payload.customer and not payload.supplier:
         raise HTTPException(400, "เลือกอย่างน้อย 1 บทบาท: ลูกค้า หรือ ผู้จำหน่าย")
     _check_duplicate(db, payload.tax_id, payload.branch_code)
-    c = Contact(code=_next_code(db, Contact, "CT"), is_active=True,
+    _check_group(db, payload.group_id)
+    c = Contact(code=_next_code(db, Contact, "CT"), is_active=True, group_id=payload.group_id,
                 **payload.model_dump(include=set(SHARED_FIELDS)))
     c.branch_code = _branch(c.branch_code)
     db.add(c); db.flush()
@@ -234,6 +248,9 @@ def update_contact(db: Session, contact_id: UUID, payload: ContactUpdate) -> Con
         c.branch_code = _branch(c.branch_code)
     if payload.is_active is not None:
         c.is_active = payload.is_active
+    if "group_id" in payload.model_fields_set:      # an explicit null clears the group
+        _check_group(db, payload.group_id)
+        c.group_id = payload.group_id
 
     if payload.customer:
         _set_customer(db, c, payload.customer)
@@ -251,3 +268,73 @@ def update_contact(db: Session, contact_id: UUID, payload: ContactUpdate) -> Con
     _push_to_roles(c)
     db.commit(); db.refresh(c)
     return c
+
+
+# ── Customer type groups ───────────────────────────────────────
+def _group_counts(db: Session) -> dict:
+    rows = (db.query(Contact.group_id, func.count(Contact.id))
+              .filter(Contact.group_id != None, Contact.is_deleted == False, Contact.is_active == True)
+              .group_by(Contact.group_id).all())
+    return dict(rows)
+
+
+def group_response(db: Session, g: ContactGroup, counts: Optional[dict] = None) -> dict:
+    counts = _group_counts(db) if counts is None else counts
+    return {**{f: getattr(g, f) for f in ("id", "code", "name", "description", "is_active")},
+            "contact_count": counts.get(g.id, 0)}
+
+
+def list_groups(db: Session, include_inactive: bool = True) -> List[dict]:
+    q = db.query(ContactGroup).filter(ContactGroup.is_deleted == False)
+    if not include_inactive:
+        q = q.filter(ContactGroup.is_active == True)
+    counts = _group_counts(db)
+    return [group_response(db, g, counts) for g in q.order_by(ContactGroup.code).all()]
+
+
+def get_group(db: Session, group_id: UUID) -> ContactGroup:
+    g = db.query(ContactGroup).filter(ContactGroup.id == group_id, ContactGroup.is_deleted == False).first()
+    if not g:
+        raise HTTPException(404, "ไม่พบกลุ่มประเภทลูกค้า")
+    return g
+
+
+def _check_group_code(db: Session, code: str, exclude_id: Optional[UUID] = None):
+    q = db.query(ContactGroup).filter(ContactGroup.code == code, ContactGroup.is_deleted == False)
+    if exclude_id:
+        q = q.filter(ContactGroup.id != exclude_id)
+    if q.first():
+        raise HTTPException(400, f"รหัสกลุ่ม {code} มีอยู่แล้ว")
+
+
+def create_group(db: Session, payload: ContactGroupCreate) -> ContactGroup:
+    if not payload.name.strip():
+        raise HTTPException(400, "ระบุชื่อกลุ่ม")
+    code = (payload.code or "").strip().upper() or _next_code(db, ContactGroup, "G")
+    _check_group_code(db, code)
+    g = ContactGroup(code=code, name=payload.name.strip(), description=payload.description, is_active=True)
+    db.add(g); db.commit(); db.refresh(g)
+    return g
+
+
+def update_group(db: Session, group_id: UUID, payload: ContactGroupUpdate) -> ContactGroup:
+    g = get_group(db, group_id)
+    data = payload.model_dump(exclude_none=True)
+    if "code" in data:
+        data["code"] = data["code"].strip().upper()
+        _check_group_code(db, data["code"], exclude_id=g.id)
+    if "name" in data and not data["name"].strip():
+        raise HTTPException(400, "ระบุชื่อกลุ่ม")
+    for k, v in data.items():
+        setattr(g, k, v.strip() if k == "name" else v)
+    db.commit(); db.refresh(g)
+    return g
+
+
+def delete_group(db: Session, group_id: UUID):
+    g = get_group(db, group_id)
+    used = db.query(Contact).filter(Contact.group_id == g.id, Contact.is_deleted == False).count()
+    if used:
+        raise HTTPException(400, f"ยังมีผู้ติดต่อในกลุ่มนี้ {used} ราย — ย้ายออกก่อน หรือปิดใช้งานกลุ่มแทน")
+    g.is_deleted = True
+    db.commit()

@@ -30,7 +30,8 @@ ROLE_TABLES = ("customers", "suppliers")
 
 def upgrade() -> None:
     bind = op.get_bind()
-    Base.metadata.create_all(bind=bind, tables=[Base.metadata.tables["contacts"]])  # checkfirst
+    # contacts is built from the live model, whose group_id points at contact_groups (0004).
+    Base.metadata.create_all(bind=bind, tables=[Base.metadata.tables[t] for t in ("contact_groups", "contacts")])  # checkfirst
 
     insp = sa.inspect(bind)
     for table in ROLE_TABLES:

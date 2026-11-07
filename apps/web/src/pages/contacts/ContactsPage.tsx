@@ -1,7 +1,8 @@
 import { useState } from 'react'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import type { ContactGroup } from './ContactGroupsPage'
 
 // ผู้ติดต่อ — one record per business partner, with customer and supplier as roles.
 // The same page serves the full list and the customer-only / supplier-only views.
@@ -12,11 +13,13 @@ interface SupplierRole { id: string; code: string; payment_terms: number; bank_n
 interface Contact {
   id: string; code: string; name: string; name_en?: string; tax_id?: string; branch_code?: string
   address?: string; phone?: string; email?: string; contact_name?: string; is_active: boolean
+  group_id?: string; group?: { id: string; code: string; name: string }
   roles: ContactRole[]; customer?: CustomerRole; supplier?: SupplierRole
   receivable: number; payable: number
 }
 
 interface Form {
+  group_id: string   // '' = no group
   name: string; name_en: string; tax_id: string; branch_code: string; address: string
   phone: string; email: string; contact_name: string
   isCustomer: boolean; credit_days: number; credit_limit: number
@@ -43,6 +46,7 @@ const errText = (e: unknown) => {
 
 function toForm(c?: Contact, role?: ContactRole): Form {
   return {
+    group_id: c?.group_id ?? '',
     name: c?.name ?? '', name_en: c?.name_en ?? '', tax_id: c?.tax_id ?? '', branch_code: c?.branch_code ?? '00000',
     address: c?.address ?? '', phone: c?.phone ?? '', email: c?.email ?? '', contact_name: c?.contact_name ?? '',
     isCustomer: c ? c.roles.includes('customer') : role !== 'supplier',
@@ -61,6 +65,7 @@ function toPayload(f: Form, editing: boolean) {
     bank_branch: opt(f.bank_branch), wht_type: opt(f.wht_type),
   } : undefined
   return {
+    group_id: f.group_id || null,
     name: f.name.trim(), name_en: opt(f.name_en), tax_id: opt(f.tax_id), branch_code: opt(f.branch_code) ?? '00000',
     address: opt(f.address), phone: opt(f.phone), email: opt(f.email), contact_name: opt(f.contact_name),
     customer, supplier,
@@ -74,11 +79,19 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
   const [editing, setEditing] = useState<Contact | null>(null)
   const [form, setForm] = useState<Form | null>(null)
   const [tried, setTried] = useState(false)   // show form errors only after a save attempt
+  const [params, setParams] = useSearchParams()
+  const groupFilter = params.get('group') ?? ''
 
   const { data: contacts = [], isLoading } = useQuery<Contact[]>({
-    queryKey: ['contacts', role ?? 'all'],
-    queryFn: async () => (await api.get('/api/v1/contacts/', { params: { role } })).data,
+    queryKey: ['contacts', role ?? 'all', groupFilter],
+    queryFn: async () => (await api.get('/api/v1/contacts/', { params: { role, group_id: groupFilter || undefined } })).data,
   })
+  const { data: groups = [] } = useQuery<ContactGroup[]>({
+    queryKey: ['contact-groups'],
+    queryFn: async () => (await api.get('/api/v1/contact-groups/')).data,
+  })
+  const activeGroups = groups.filter(g => g.is_active)
+  const setGroupFilter = (id: string) => setParams(p => { if (id) p.set('group', id); else p.delete('group'); return p }, { replace: true })
 
   // Duplicate warning: another contact with this tax ID + branch.
   const taxId = form?.tax_id.trim() ?? ''
@@ -93,8 +106,8 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
       ? api.patch(`/api/v1/contacts/${editing.id}`, toPayload(f, true))
       : api.post('/api/v1/contacts/', toPayload(f, false)),
     onSuccess: () => {
-      // Documents pick customers/suppliers from these lists.
-      for (const k of ['contacts', 'customers', 'suppliers']) qc.invalidateQueries({ queryKey: [k] })
+      // Documents pick customers/suppliers from these lists; groups show their counts.
+      for (const k of ['contacts', 'customers', 'suppliers', 'contact-groups']) qc.invalidateQueries({ queryKey: [k] })
       close()
     },
   })
@@ -136,6 +149,10 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
           ))}
         </div>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาชื่อ รหัส หรือเลขผู้เสียภาษี" aria-label="ค้นหาผู้ติดต่อ" style={{ ...inp, maxWidth:300 }} />
+        <select value={groupFilter} onChange={e=>setGroupFilter(e.target.value)} aria-label="กรองตามกลุ่มประเภทลูกค้า" style={{ ...inp, width:'auto', minWidth:160, cursor:'pointer' }}>
+          <option value="">ทุกกลุ่ม</option>
+          {groups.map(g => <option key={g.id} value={g.id}>{g.name}{g.is_active ? '' : ' (ปิดใช้งาน)'}</option>)}
+        </select>
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))', gap:12 }}>
@@ -156,8 +173,8 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
         {isLoading ? <div style={{ padding:48, textAlign:'center', color:'var(--color-dim)' }}>กำลังโหลด...</div>
         : shown.length === 0 ? <div style={{ padding:56, textAlign:'center', color:'var(--color-dim)', fontSize:13 }}>{q ? 'ไม่พบผู้ติดต่อที่ค้นหา' : 'ยังไม่มีผู้ติดต่อ — กด “+ เพิ่มผู้ติดต่อ” เพื่อเริ่ม'}</div>
         : (
-          <table style={{ width:'100%', borderCollapse:'collapse', minWidth:820 }}>
-            <thead><tr>{['รหัส','ชื่อ','บทบาท','เลขผู้เสียภาษี / สาขา','ติดต่อ','ลูกหนี้คงค้าง','เจ้าหนี้คงค้าง',''].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+          <table style={{ width:'100%', borderCollapse:'collapse', minWidth:900 }}>
+            <thead><tr>{['รหัส','ชื่อ','กลุ่ม','บทบาท','เลขผู้เสียภาษี / สาขา','ติดต่อ','ลูกหนี้คงค้าง','เจ้าหนี้คงค้าง',''].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
             <tbody>
               {shown.map(c => (
                 <tr key={c.id} onClick={()=>open(c)} style={{ cursor:'pointer' }}>
@@ -166,6 +183,7 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
                     <div style={{ fontWeight:600 }}>{c.name}</div>
                     {c.name_en && <div style={{ fontSize:10, color:'var(--color-dim)' }}>{c.name_en}</div>}
                   </td>
+                  <td style={{ ...td, fontSize:11, color: c.group ? 'var(--color-text-secondary)' : 'var(--color-dim)', whiteSpace:'nowrap' }}>{c.group?.name ?? '—'}</td>
                   <td style={td}>
                     <div style={{ display:'flex', gap:4, flexWrap:'wrap' }}>
                       {c.roles.map(r => {
@@ -200,6 +218,14 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
             <form onSubmit={e => { e.preventDefault(); setTried(true); if (!formError) saveM.mutate(form) }} style={{ padding:24, display:'flex', flexDirection:'column', gap:16 }}>
               <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fit,minmax(200px,1fr))', gap:12 }}>
                 <div style={{ gridColumn:'1 / -1' }}><label style={lbl}>ชื่อ *</label><input value={form.name} onChange={e=>set('name', e.target.value)} style={inp} placeholder="บริษัท / ร้าน / บุคคล" /></div>
+                <div>
+                  <label style={lbl}>กลุ่มประเภทลูกค้า</label>
+                  <select value={form.group_id} onChange={e=>set('group_id', e.target.value)} style={{ ...inp, cursor:'pointer' }}>
+                    <option value="">— ไม่ระบุ —</option>
+                    {activeGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    {editing?.group && !activeGroups.some(g => g.id === editing.group!.id) && <option value={editing.group.id}>{editing.group.name} (ปิดใช้งาน)</option>}
+                  </select>
+                </div>
                 <div><label style={lbl}>ชื่อภาษาอังกฤษ</label><input value={form.name_en} onChange={e=>set('name_en', e.target.value)} style={inp} /></div>
                 <div><label style={lbl}>เลขประจำตัวผู้เสียภาษี</label><input value={form.tax_id} onChange={e=>set('tax_id', e.target.value.replace(/\D/g,'').slice(0,13))} inputMode="numeric" style={{ ...inp, fontFamily:'monospace' }} placeholder="13 หลัก" /></div>
                 <div><label style={lbl}>สาขา</label><input value={form.branch_code} onChange={e=>set('branch_code', e.target.value.replace(/\D/g,'').slice(0,5))} inputMode="numeric" style={{ ...inp, fontFamily:'monospace' }} placeholder="00000 = สำนักงานใหญ่" /></div>
