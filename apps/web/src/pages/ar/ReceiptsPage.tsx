@@ -5,6 +5,12 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
 import { openDocPdf } from '@/lib/pdf'
+import DocSearch from '@/components/doc/DocSearch'
+import PanelBack from '@/components/doc/PanelBack'
+import ColumnPicker from '@/components/doc/ColumnPicker'
+import { useColumns } from '@/components/doc/columns'
+import { matchesSearch } from '@/components/doc/search'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Receipt {
   id: string; receipt_number: string; invoice_id: string; invoice_number?: string
@@ -36,6 +42,12 @@ const lbl: React.CSSProperties = { display:'block', fontSize:10, fontWeight:700,
 export default function ReceiptsPage() {
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
+  const [search, setSearch] = useState('')
+  const cols = useColumns('receipts', [
+    { id:'number', label:'เลขที่ใบเสร็จ', required:true }, { id:'invoice', label:'ใบแจ้งหนี้' }, { id:'customer', label:'ลูกค้า' },
+    { id:'date', label:'วันที่' }, { id:'method', label:'ช่องทาง' }, { id:'reference', label:'อ้างอิง' },
+    { id:'amount', label:'จำนวนเงิน' }, { id:'gl', label:'GL' }, 
+  ])
 
   const { data: receipts = [], isLoading } = useQuery<Receipt[]>({
     queryKey: ['receipts'],
@@ -61,12 +73,9 @@ export default function ReceiptsPage() {
     defaultValues: { date: new Date().toISOString().split('T')[0], method: 'bank_transfer' },
   })
   const selectedInv = outstanding.find(i => i.id === watch('invoice_id'))
+  const shown = receipts.filter(r => matchesSearch(search, r.receipt_number, r.invoice_number, r.customer_name, r.reference,
+    r.amount, METHOD_LABEL[r.method] || r.method, new Date(r.date).toLocaleDateString('th-TH')))
 
-  const total = receipts.reduce((s,r)=>s+Number(r.amount),0)
-  const thisMonth = receipts.filter(r=>{ const d=new Date(r.date); const n=new Date(); return d.getMonth()===n.getMonth()&&d.getFullYear()===n.getFullYear() }).reduce((s,r)=>s+Number(r.amount),0)
-
-  const overlay: React.CSSProperties = { position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }
-  const modal: React.CSSProperties  = { background:'var(--color-card)', border:'1px solid var(--color-border-strong)', borderRadius:16, width:'100%', maxWidth:480, maxHeight:'92vh', overflowY:'auto' }
 
   return (
     <div style={{ display:'flex', flexDirection:'column', gap:20 }}>
@@ -78,41 +87,30 @@ export default function ReceiptsPage() {
         <button onClick={()=>setShowCreate(true)} style={{ background:'linear-gradient(135deg,#43E97B,#38C172)', color:'#0A2818', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 20px', cursor:'pointer' }}>+ บันทึกรับชำระ</button>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:12 }}>
-        {[
-          { l:'ยอดรับชำระทั้งหมด', v:`฿${total.toLocaleString('th-TH',{minimumFractionDigits:2})}`, color:'#43E97B' },
-          { l:'รับชำระเดือนนี้', v:`฿${thisMonth.toLocaleString('th-TH',{minimumFractionDigits:2})}`, color:'var(--color-accent-light)' },
-          { l:'จำนวนใบเสร็จ', v: receipts.length, color:'#F5A623' },
-        ].map(s=>(
-          <div key={s.l} style={{ background:'var(--color-card)', border:`1px solid ${s.color}20`, borderTop:`2px solid ${s.color}`, borderRadius:12, padding:'14px 16px' }}>
-            <p style={{ margin:'0 0 4px', fontSize:10, color:'var(--color-muted)' }}>{s.l}</p>
-            <p style={{ margin:0, fontSize:20, fontWeight:800, color:s.color }}>{s.v}</p>
-          </div>
-        ))}
-      </div>
+      <DocSearch value={search} onChange={setSearch} count={shown.length} total={receipts.length} placeholder="ค้นหาเลขที่ใบเสร็จ ใบแจ้งหนี้ ลูกค้า อ้างอิง หรือยอดเงิน">
+        <ColumnPicker cols={cols} />
+      </DocSearch>
 
-      <div style={{ background:'var(--color-card)', border:'1px solid var(--color-border)', borderRadius:14, overflow:'hidden' }}>
+      <div style={{ background:'var(--color-card)', border:'1px solid var(--color-border)', borderRadius:14, overflow:'auto' }}>
         {isLoading ? <div style={{ padding:48, textAlign:'center', color:'var(--color-dim)' }}>กำลังโหลด...</div>
         : receipts.length === 0 ? <div style={{ padding:56, textAlign:'center', color:'var(--color-dim)', fontSize:13 }}>ยังไม่มีการรับชำระเงิน — กด “+ บันทึกรับชำระ” เพื่อเริ่ม</div>
+        : shown.length === 0 ? <div style={{ padding:56, textAlign:'center', color:'var(--color-dim)', fontSize:13 }}>ไม่พบรายการที่ค้นหา</div>
         : (
-          <table style={{ width:'100%', borderCollapse:'collapse' }}>
-            <thead><tr>{['เลขที่ใบเสร็จ','ใบแจ้งหนี้','ลูกค้า','วันที่','ช่องทาง','อ้างอิง','จำนวนเงิน','GL',''].map(h=>(
-              <th key={h} style={{ padding:'10px 12px', textAlign:'left', fontSize:9, fontWeight:700, color:'var(--color-dim)', textTransform:'uppercase', letterSpacing:'0.08em', borderBottom:'1px solid var(--color-border)' }}>{h}</th>))}
+          <table className="doc-list">
+            <thead><tr>{cols.visible.map(c=>(
+              <th key={c.id} style={{ padding:'10px 12px', textAlign:'left', fontSize:9, fontWeight:700, color:'var(--color-dim)', textTransform:'uppercase', letterSpacing:'0.08em', borderBottom:'1px solid var(--color-border)' }}>{c.id === 'actions' ? '' : c.label}</th>))}
             </tr></thead>
             <tbody>
-              {receipts.map(r=>(
-                <tr key={r.id}>
+              {shown.map(r=>(
+                <tr key={r.id} onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/receipt/${r.id}`)} title="คลิกเพื่อพิมพ์ใบเสร็จ" style={{ cursor:'pointer' }}>
                   <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontFamily:'monospace', fontSize:11, color:'#43E97B' }}>{r.receipt_number}</td>
-                  <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontFamily:'monospace', fontSize:11, color:'var(--color-accent-light)' }}>{r.invoice_number || '—'}</td>
-                  <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:12 }}>{r.customer_name || '—'}</td>
-                  <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:11, color:'var(--color-text-tertiary)' }}>{new Date(r.date).toLocaleDateString('th-TH')}</td>
-                  <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:11, color:'var(--color-text-tertiary)' }}>{METHOD_LABEL[r.method] || r.method}</td>
-                  <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:11, fontFamily:'monospace', color:'var(--color-text-tertiary)' }}>{r.reference || '—'}</td>
-                  <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:12, fontFamily:'monospace', fontWeight:700, color:'#43E97B' }}>฿{Number(r.amount).toLocaleString('th-TH',{minimumFractionDigits:2})}</td>
-                  <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)' }}>{r.gl_posted ? <span style={{ fontSize:10, color:'#43E97B' }}>✓</span> : <span style={{ fontSize:10, color:'var(--color-dim)' }}>—</span>}</td>
-                  <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)' }}>
-                    <button onClick={()=>openDocPdf(`/api/v1/doc-templates/preview/receipt/${r.id}`)} style={{ fontSize:10, padding:'4px 8px', borderRadius:6, border:'1px solid #8E8E9340', background:'#8E8E9312', color:'var(--color-text-secondary)', cursor:'pointer', fontWeight:700 }}>🖨 พิมพ์</button>
-                  </td>
+                  {cols.on('invoice') && <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontFamily:'monospace', fontSize:11, color:'var(--color-accent-light)' }}>{r.invoice_number || '—'}</td>}
+                  {cols.on('customer') && <td className="doc-wrap" style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:12 }}>{r.customer_name || '—'}</td>}
+                  {cols.on('date') && <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:11, color:'var(--color-text-tertiary)' }}>{new Date(r.date).toLocaleDateString('th-TH')}</td>}
+                  {cols.on('method') && <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:11, color:'var(--color-text-tertiary)' }}>{METHOD_LABEL[r.method] || r.method}</td>}
+                  {cols.on('reference') && <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:11, fontFamily:'monospace', color:'var(--color-text-tertiary)' }}>{r.reference || '—'}</td>}
+                  {cols.on('amount') && <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:12, fontFamily:'monospace', fontWeight:700, color:'#43E97B' }}>฿{Number(r.amount).toLocaleString('th-TH',{minimumFractionDigits:2})}</td>}
+                  {cols.on('gl') && <td style={{ padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)' }}>{r.gl_posted ? <span style={{ fontSize:10, color:'#43E97B' }}>✓</span> : <span style={{ fontSize:10, color:'var(--color-dim)' }}>—</span>}</td>}
                 </tr>
               ))}
             </tbody>
@@ -122,8 +120,9 @@ export default function ReceiptsPage() {
 
       {/* CREATE RECEIPT MODAL */}
       {showCreate && (
-        <div style={overlay} onClick={()=>setShowCreate(false)}>
-          <div style={modal} onClick={e=>e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={()=>setShowCreate(false)} label="กลับไปที่ใบเสร็จรับเงิน" />
+          <div className="doc-panel-card">
             <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div><h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>บันทึกรับชำระเงิน</h3><p style={{ margin:0, fontSize:11, color:'var(--color-muted)' }}>เลือกใบแจ้งหนี้ที่ค้างชำระ</p></div>
               <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
@@ -131,10 +130,10 @@ export default function ReceiptsPage() {
             <form onSubmit={handleSubmit(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:16 }}>
               <div>
                 <label style={lbl}>ใบแจ้งหนี้ที่ค้างชำระ *</label>
-                <select {...register('invoice_id')} onChange={e=>{ setValue('invoice_id', e.target.value); const inv = outstanding.find(i=>i.id===e.target.value); if (inv) setValue('amount', Number(inv.balance_due)) }} style={{ ...inp, cursor:'pointer' }}>
+                <SearchSelect {...register('invoice_id')} onChange={e=>{ setValue('invoice_id', e.target.value); const inv = outstanding.find(i=>i.id===e.target.value); if (inv) setValue('amount', Number(inv.balance_due)) }} style={{ ...inp, cursor:'pointer' }}>
                   <option value="">-- เลือกใบแจ้งหนี้ --</option>
                   {outstanding.map(i => <option key={i.id} value={i.id}>{i.number} — {i.customer?.name} (ค้าง ฿{Number(i.balance_due).toLocaleString('th-TH',{minimumFractionDigits:2})})</option>)}
-                </select>
+                </SearchSelect>
                 {errors.invoice_id && <p style={{ margin:'3px 0 0', fontSize:10, color:'#FF6B6B' }}>{errors.invoice_id.message}</p>}
                 {outstanding.length === 0 && <p style={{ margin:'6px 0 0', fontSize:11, color:'var(--color-dim)' }}>ไม่มีใบแจ้งหนี้ค้างชำระ (ต้อง Post GL ใบแจ้งหนี้ก่อนจึงจะรับชำระได้)</p>}
               </div>
@@ -148,13 +147,13 @@ export default function ReceiptsPage() {
                 <div><label style={lbl}>วันที่รับเงิน</label><input {...register('date')} type="date" style={inp} /></div>
                 <div>
                   <label style={lbl}>ช่องทางการรับเงิน</label>
-                  <select {...register('method')} style={{ ...inp, cursor:'pointer' }}>
+                  <SearchSelect {...register('method')} style={{ ...inp, cursor:'pointer' }}>
                     <option value="bank_transfer">โอนธนาคาร</option>
                     <option value="cash">เงินสด</option>
                     <option value="promptpay">PromptPay</option>
                     <option value="check">เช็ค</option>
                     <option value="credit_card">บัตรเครดิต</option>
-                  </select>
+                  </SearchSelect>
                 </div>
               </div>
               <div><label style={lbl}>เลขที่อ้างอิง (เลขที่โอน/เช็ค)</label><input {...register('reference')} placeholder="TRANS20260929001" style={inp} /></div>

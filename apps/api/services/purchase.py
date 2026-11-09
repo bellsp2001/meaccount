@@ -17,9 +17,10 @@ from fastapi import HTTPException
 from models.purchase import PurchaseDocument, PurchaseDocumentItem, PurchaseDocType
 from models.sales import SalesDocStatus
 from models.ap import Supplier, Bill, BillStatus, APPayment
-from models.accounting import JournalType
+from models.accounting import BookSide
 from services.ap import _find_acc, _create_posted_journal, bill_posting_accounts, create_bill
-from services.sales import _calc_totals
+from services.document_books import resolve_book, require_book
+from services.sales import _calc_totals, _item_fields
 from schemas.purchase import PurchaseDocCreate
 from schemas.sales import SalesItemCreate
 from schemas.ap import BillCreate, BillItemCreate
@@ -50,11 +51,7 @@ def next_doc_number(db: Session, doc_type: PurchaseDocType, d: date) -> str:
 # ── Create / read ──────────────────────────────────────────────
 def _add_items(db: Session, doc_id: UUID, items: List[SalesItemCreate]):
     for i, it in enumerate(items):
-        db.add(PurchaseDocumentItem(
-            document_id=doc_id, sequence=i, description=it.description,
-            quantity=it.quantity, unit=it.unit, unit_price=it.unit_price,
-            discount_pct=it.discount_pct, amount=it.amount,
-        ))
+        db.add(PurchaseDocumentItem(document_id=doc_id, sequence=i, **_item_fields(it)))
 
 
 def create_purchase_document(db: Session, payload: PurchaseDocCreate, user_id: Optional[UUID] = None) -> PurchaseDocument:
@@ -65,19 +62,51 @@ def create_purchase_document(db: Session, payload: PurchaseDocCreate, user_id: O
     if is_note:
         _posted_bill_for(db, payload.bill_id, payload.supplier_id)
 
-    subtotal, vat_amount, total = _calc_totals(payload.items, payload.vat_rate)
+    subtotal, vat_amount, total, vat_rate = _calc_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
     doc = PurchaseDocument(
         number=next_doc_number(db, payload.doc_type, payload.date),
         doc_type=payload.doc_type, supplier_id=payload.supplier_id,
-        date=payload.date, valid_until=payload.valid_until,
-        vat_rate=payload.vat_rate, subtotal=subtotal, vat_amount=vat_amount, total=total,
+        date=payload.date, valid_until=payload.valid_until, vat_inclusive=payload.vat_inclusive,
+        vat_rate=vat_rate, subtotal=subtotal, vat_amount=vat_amount, total=total,
         deposit_amount=payload.deposit_amount if payload.doc_type == PurchaseDocType.DEPOSIT else Decimal("0"),
         ref_number=payload.ref_number, note=payload.note, created_by=user_id,
         bill_id=payload.bill_id if is_note else None,
         reason=payload.reason if is_note else None,
+        book_id=resolve_book(db, payload.book_id, BookSide.EXPENSE) and payload.book_id,
     )
     db.add(doc); db.flush()
     _add_items(db, doc.id, payload.items)
+    db.commit(); db.refresh(doc)
+    return doc
+
+
+EDITABLE = (SalesDocStatus.DRAFT, SalesDocStatus.SENT)
+
+
+def update_purchase_document(db: Session, doc_id: UUID, payload: PurchaseDocCreate) -> PurchaseDocument:
+    """Rewrite a document's header and items. Only while it is a draft or sent and not
+    yet posted to GL; the number and type stay."""
+    doc = get_purchase_document(db, doc_id)
+    if doc.gl_posted or doc.status not in EDITABLE:
+        raise HTTPException(400, "แก้ไขได้เฉพาะเอกสารที่ยังไม่ Post GL และยังไม่ถูกแปลง/ยกเลิก")
+    if payload.doc_type != doc.doc_type:
+        raise HTTPException(400, "เปลี่ยนประเภทเอกสารไม่ได้")
+    if not db.query(Supplier).filter(Supplier.id == payload.supplier_id, Supplier.is_deleted == False).first():
+        raise HTTPException(404, "ไม่พบผู้จำหน่าย")
+    is_note = doc.doc_type in NOTE_TYPES
+    if is_note:
+        _posted_bill_for(db, payload.bill_id, payload.supplier_id)
+
+    doc.subtotal, doc.vat_amount, doc.total, doc.vat_rate = _calc_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
+    doc.vat_inclusive = payload.vat_inclusive
+    doc.supplier_id, doc.date, doc.valid_until = payload.supplier_id, payload.date, payload.valid_until
+    doc.ref_number, doc.note = payload.ref_number, payload.note
+    doc.book_id = resolve_book(db, payload.book_id, BookSide.EXPENSE) and payload.book_id
+    if doc.doc_type == PurchaseDocType.DEPOSIT:
+        doc.deposit_amount = payload.deposit_amount
+    if is_note:
+        doc.bill_id, doc.reason = payload.bill_id, payload.reason
+    doc.items = [PurchaseDocumentItem(sequence=i, **_item_fields(it)) for i, it in enumerate(payload.items)]
     db.commit(); db.refresh(doc)
     return doc
 
@@ -108,6 +137,9 @@ def set_status(db: Session, doc_id: UUID, status: SalesDocStatus) -> PurchaseDoc
         raise HTTPException(400, "เอกสารนี้ถูกแปลง/ยกเลิกแล้ว ไม่สามารถเปลี่ยนสถานะ")
     if doc.gl_posted and status == SalesDocStatus.CANCELLED:
         raise HTTPException(400, "เอกสารนี้ Post ไป GL แล้ว ไม่สามารถยกเลิกได้")
+    # Deposits and notes are confirmed by posting them (post-deposit / post-note), never by a bare status.
+    if status == SalesDocStatus.ACCEPTED and not doc.gl_posted and doc.doc_type in (PurchaseDocType.DEPOSIT, *NOTE_TYPES):
+        raise HTTPException(400, "ยืนยันเอกสารนี้ด้วยการลงบัญชี (Post GL)")
     doc.status = status
     db.commit(); db.refresh(doc)
     return doc
@@ -125,14 +157,15 @@ def convert_document(db: Session, doc_id: UUID, user_id: Optional[UUID] = None):
     items = [SalesItemCreate(
         description=it.description, quantity=it.quantity, unit=it.unit,
         unit_price=it.unit_price, discount_pct=it.discount_pct, sequence=it.sequence,
+        tax_code_id=it.tax_code_id, vat_rate=it.vat_rate, product_id=it.product_id, detail=it.detail,
     ) for it in doc.items]
 
     if doc.doc_type == PurchaseDocType.RFQ:
-        subtotal, vat_amount, total = _calc_totals(items, doc.vat_rate)
+        subtotal, vat_amount, total, vat_rate = _calc_totals(db, items, doc.vat_rate, doc.vat_inclusive)
         po = PurchaseDocument(
             number=next_doc_number(db, PurchaseDocType.PURCHASE_ORDER, date.today()),
             doc_type=PurchaseDocType.PURCHASE_ORDER, supplier_id=doc.supplier_id,
-            date=date.today(), valid_until=doc.valid_until, vat_rate=doc.vat_rate,
+            date=date.today(), valid_until=doc.valid_until, vat_rate=vat_rate, vat_inclusive=doc.vat_inclusive,
             subtotal=subtotal, vat_amount=vat_amount, total=total,
             note=doc.note, created_by=user_id, source_doc_id=doc.id,
         )
@@ -146,11 +179,12 @@ def convert_document(db: Session, doc_id: UUID, user_id: Optional[UUID] = None):
 
     # PURCHASE_ORDER → Bill. Bill lines carry no discount, so the discount goes into the unit price.
     bill = create_bill(db, BillCreate(
-        supplier_id=doc.supplier_id, date=date.today(), vat_rate=doc.vat_rate,
+        supplier_id=doc.supplier_id, date=date.today(), vat_rate=doc.vat_rate, vat_inclusive=doc.vat_inclusive,
         description=f"ตามใบสั่งซื้อ {doc.number}", ref_number=doc.ref_number, note=doc.note,
         items=[BillItemCreate(
             description=it.description, quantity=it.quantity, unit=it.unit, sequence=it.sequence,
             unit_price=(it.unit_price * (1 - it.discount_pct / 100)).quantize(Decimal("0.0001")),
+            tax_code_id=it.tax_code_id, vat_rate=it.vat_rate, product_id=it.product_id, detail=it.detail,
         ) for it in items],
     ), user_id=user_id)
     doc.status = SalesDocStatus.CONVERTED
@@ -170,6 +204,7 @@ def post_deposit_to_gl(db: Session, doc_id: UUID, user_id: Optional[UUID] = None
         raise HTTPException(400, "ใบจ่ายมัดจำนี้ Post ไป GL แล้ว")
     if doc.status == SalesDocStatus.CANCELLED:
         raise HTTPException(400, "เอกสารนี้ถูกยกเลิกแล้ว")
+    book = require_book(doc.book)
     amount = doc.deposit_amount if doc.deposit_amount > 0 else doc.total
     if amount <= 0:
         raise HTTPException(400, "ยอดมัดจำต้องมากกว่า 0")
@@ -183,7 +218,7 @@ def post_deposit_to_gl(db: Session, doc_id: UUID, user_id: Optional[UUID] = None
     journal = _create_posted_journal(db, doc.date, f"จ่ายเงินมัดจำ {doc.number} — {doc.supplier.name}", doc.number, [
         {"account_id": dep_acc.id,  "debit": amount, "credit": zero, "description": f"เงินมัดจำจ่ายล่วงหน้า {doc.number}"},
         {"account_id": bank_acc.id, "debit": zero, "credit": amount, "description": f"จ่ายเงินมัดจำ {doc.number}"},
-    ], user_id, JournalType.PAYMENT)
+    ], user_id, book.journal_type)
 
     doc.gl_posted = True
     doc.gl_journal_id = journal.id
@@ -217,12 +252,14 @@ def post_note_to_gl(db: Session, doc_id: UUID, user_id: Optional[UUID] = None) -
         raise HTTPException(400, "เอกสารนี้ Post ไป GL แล้ว")
     if doc.status == SalesDocStatus.CANCELLED:
         raise HTTPException(400, "เอกสารนี้ถูกยกเลิกแล้ว")
+    book = require_book(doc.book)
     bill = _posted_bill_for(db, doc.bill_id, doc.supplier_id)
     is_credit = doc.doc_type == PurchaseDocType.CREDIT_NOTE
     if is_credit and doc.total > bill.balance_due:
         raise HTTPException(400, f"ยอดลดหนี้เกินยอดค้างจ่ายของ {bill.number} ({bill.balance_due})")
 
-    ap_acc, exp_acc, vat_acc, journal_type = bill_posting_accounts(db, bill)
+    # The note's book decides the accounts (normally the bill's own book, pre-selected in the form).
+    ap_acc, exp_acc, vat_acc, journal_type = bill_posting_accounts(db, bill, book)
     zero = Decimal("0")
     label = "ลดหนี้" if is_credit else "เพิ่มหนี้"
     # Debit-note signs (expense debit, AP credit); a credit note flips every line.

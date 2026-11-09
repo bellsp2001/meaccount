@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Product {
   id: string; sku: string; name: string; name_en?: string; unit: string
@@ -140,8 +142,9 @@ export default function ProductsPage() {
 
       {/* CREATE MODAL */}
       {showCreate && (
-        <div style={overlay} onClick={() => setShowCreate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowCreate(false)} label="กลับไปที่สินค้า" />
+          <div className="doc-panel-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>เพิ่มสินค้าใหม่</h3>
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
@@ -156,10 +159,10 @@ export default function ProductsPage() {
                 <div><label style={lbl}>หน่วยนับ</label><input {...register('unit')} placeholder="ชิ้น" style={inp} /></div>
                 <div>
                   <label style={lbl}>วิธีคำนวณต้นทุน</label>
-                  <select {...register('cost_method')} style={{ ...inp, cursor: 'pointer' }}>
+                  <SearchSelect {...register('cost_method')} style={{ ...inp, cursor: 'pointer' }}>
                     <option value="fifo">FIFO (เข้าก่อนออกก่อน)</option>
                     <option value="avco">AVCO (ต้นทุนเฉลี่ย)</option>
-                  </select>
+                  </SearchSelect>
                 </div>
               </div>
               <div><label style={lbl}>ราคาขาย (บาท)</label><input {...register('sale_price', { valueAsNumber: true })} type="number" min="0" step="0.01" style={inp} /></div>

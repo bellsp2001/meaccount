@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
 
 interface APIKey { id: string; name: string; key_prefix: string; status: string; rate_limit_per_min: number; request_count: number; last_used_at?: string; created_at: string }
 
@@ -32,8 +33,6 @@ export default function APIKeysPage() {
     if (newKey) { navigator.clipboard.writeText(newKey); setCopied(true); setTimeout(() => setCopied(false), 2000) }
   }
 
-  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties = { background: '#0D1018', border: '1px solid #1E2A3A', borderRadius: 16, width: '100%', maxWidth: 480 }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -74,8 +73,9 @@ export default function APIKeysPage() {
       </div>
 
       {showCreate && (
-        <div style={overlay} onClick={() => setShowCreate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowCreate(false)} label="กลับไปที่ API Keys" />
+          <div className="doc-panel-card">
             <div style={{ padding: '18px 24px', borderBottom: '1px solid #151C28', display: 'flex', justifyContent: 'space-between' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>{newKey ? '✓ สร้าง API Key สำเร็จ' : 'สร้าง API Key ใหม่'}</h3>
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>

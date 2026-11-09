@@ -1,4 +1,5 @@
 import enum
+from sqlalchemy.sql import false as sa_false
 from sqlalchemy import (Column, String, Numeric, Boolean, Enum, ForeignKey,
                         Text, Date, Integer)
 from sqlalchemy.orm import relationship
@@ -38,7 +39,10 @@ class Customer(Base, UUIDMixin, TimestampMixin):
     credit_days  = Column(Integer,       default=30, nullable=False)
     credit_limit = Column(Numeric(18,2), default=0,  nullable=False)
     is_active    = Column(Boolean,       default=True)
+    # The shared partner record (models.contact); this row is its customer role.
+    contact_id   = Column(UUIDType(),    ForeignKey("contacts.id"), nullable=True, unique=True)
 
+    contact  = relationship("Contact", back_populates="customer")
     invoices = relationship("Invoice", back_populates="customer", lazy="dynamic")
 
 
@@ -52,6 +56,7 @@ class Invoice(Base, UUIDMixin, TimestampMixin):
     status      = Column(Enum(InvoiceStatus), default=InvoiceStatus.DRAFT, nullable=False)
     subtotal    = Column(Numeric(18,2), default=0)
     vat_rate    = Column(Numeric(5,2),  default=7)
+    vat_inclusive = Column(Boolean, nullable=False, default=False, server_default=sa_false())   # ราคารวม VAT
     vat_amount  = Column(Numeric(18,2), default=0)
     total       = Column(Numeric(18,2), default=0)
     paid_amount = Column(Numeric(18,2), default=0)
@@ -84,6 +89,11 @@ class InvoiceItem(Base, UUIDMixin):
     unit_price   = Column(Numeric(18,4), nullable=False)
     discount_pct = Column(Numeric(5,2),  default=0)
     amount       = Column(Numeric(18,2), nullable=False)
+    # Per-line VAT: the ประเภทภาษี picked for the line and its rate (null = the invoice's rate)
+    tax_code_id  = Column(UUIDType(),    ForeignKey("tax_codes.id"), nullable=True)
+    product_id   = Column(UUIDType(),    ForeignKey("products.id"), nullable=True)   # picked from สินค้า/บริการ
+    detail       = Column(Text,          nullable=True)   # the line's คำอธิบาย
+    vat_rate     = Column(Numeric(5,2),  nullable=True)
 
     invoice = relationship("Invoice", back_populates="items")
 

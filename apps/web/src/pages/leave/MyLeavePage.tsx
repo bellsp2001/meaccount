@@ -2,6 +2,8 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
 import { useAuthStore } from '@/store/auth'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Employee { id: string; employee_code: string; full_name: string }
 interface LeaveType { id: string; code: string; name: string; is_paid: boolean; default_days_per_year: number }
@@ -47,8 +49,6 @@ export default function MyLeavePage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['leave-requests'] }); qc.invalidateQueries({ queryKey: ['leave-balances'] }) },
   })
 
-  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 460 }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -63,10 +63,10 @@ export default function MyLeavePage() {
         </button>
       </div>
 
-      <select value={employeeId} onChange={e => setEmployeeId(e.target.value)} style={{ ...inp, maxWidth: 320, cursor: 'pointer' }}>
+      <SearchSelect value={employeeId} onChange={e => setEmployeeId(e.target.value)} style={{ ...inp, maxWidth: 320, cursor: 'pointer' }}>
         <option value="">-- เลือกพนักงาน --</option>
         {employees.map(e => <option key={e.id} value={e.id}>{e.employee_code} — {e.full_name}</option>)}
-      </select>
+      </SearchSelect>
 
       {employeeId && (
         <>
@@ -110,16 +110,17 @@ export default function MyLeavePage() {
       )}
 
       {showRequest && (
-        <div style={overlay} onClick={() => setShowRequest(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowRequest(false)} label="กลับไปที่การลา" />
+          <div className="doc-panel-card">
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}><h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>ขอลา</h3></div>
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={lbl}>ประเภทการลา</label>
-                <select value={form.leave_type_id} onChange={e => setForm({ ...form, leave_type_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect value={form.leave_type_id} onChange={e => setForm({ ...form, leave_type_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
                   <option value="">-- เลือกประเภท --</option>
                   {leaveTypes.map(t => <option key={t.id} value={t.id}>{t.name} {!t.is_paid && '(ไม่รับค่าจ้าง)'}</option>)}
-                </select>
+                </SearchSelect>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div><label style={lbl}>วันเริ่มลา</label><input type="date" value={form.start_date} onChange={e => setForm({ ...form, start_date: e.target.value })} style={inp} /></div>

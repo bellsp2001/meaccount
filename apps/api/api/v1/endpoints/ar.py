@@ -17,7 +17,7 @@ from schemas.ar import (
 )
 from services.ar import (
     get_customers, create_customer, update_customer,
-    create_invoice, post_invoice_to_gl, receive_payment,
+    create_invoice, update_invoice, post_invoice_to_gl, receive_payment,
     get_aging_report,
 )
 from services.ocr import extract_invoice_from_image
@@ -90,6 +90,12 @@ def create_invoice_endpoint(
     db: Session = Depends(get_db),
 ):
     return create_invoice(db, payload, user_id=current_user.id)
+
+
+@router.put("/invoices/{inv_id}", response_model=InvoiceResponse)
+def update_invoice_endpoint(inv_id: UUID, payload: InvoiceCreate,
+                            current_user: User = Depends(require_accountant_up), db: Session = Depends(get_db)):
+    return update_invoice(db, inv_id, payload)
 
 
 @router.get("/invoices/{inv_id}", response_model=InvoiceResponse)

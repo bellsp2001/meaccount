@@ -15,7 +15,7 @@ from schemas.purchase import (
 from schemas.sales import ConvertResult
 from schemas.ap import BillResponse
 from services.purchase import (
-    create_purchase_document, list_purchase_documents, get_purchase_document,
+    create_purchase_document, update_purchase_document, list_purchase_documents, get_purchase_document,
     set_status, convert_document, post_deposit_to_gl, post_note_to_gl,
     list_purchase_tax_invoices, list_payment_vouchers, expense_report, get_ap_aging,
 )
@@ -40,6 +40,12 @@ def list_docs(
 def create_doc(payload: PurchaseDocCreate,
                current_user: User = Depends(require_accountant_up), db: Session = Depends(get_db)):
     return create_purchase_document(db, payload, user_id=current_user.id)
+
+
+@router.put("/purchase-documents/{doc_id}", response_model=PurchaseDocResponse)
+def update_doc(doc_id: UUID, payload: PurchaseDocCreate,
+               current_user: User = Depends(require_accountant_up), db: Session = Depends(get_db)):
+    return update_purchase_document(db, doc_id, payload)
 
 
 @router.get("/purchase-documents/{doc_id}", response_model=PurchaseDocResponse)

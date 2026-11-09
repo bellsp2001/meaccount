@@ -1,5 +1,6 @@
 import enum
 from datetime import datetime
+from sqlalchemy.sql import false as sa_false
 from sqlalchemy import (Column, String, Numeric, Boolean, Enum, ForeignKey,
                         Text, Date, Integer, DateTime)
 from sqlalchemy.orm import relationship
@@ -56,8 +57,11 @@ class Supplier(Base, UUIDMixin, TimestampMixin):
     bank_branch   = Column(String(100), nullable=True)
     wht_type      = Column(String(10),  nullable=True)
     is_active     = Column(Boolean,     default=True)
+    # The shared partner record (models.contact); this row is its supplier role.
+    contact_id    = Column(UUIDType(),  ForeignKey("contacts.id"), nullable=True, unique=True)
 
-    bills = relationship("Bill", back_populates="supplier", lazy="dynamic")
+    contact = relationship("Contact", back_populates="supplier")
+    bills   = relationship("Bill", back_populates="supplier", lazy="dynamic")
 
 
 class Bill(Base, UUIDMixin, TimestampMixin):
@@ -73,6 +77,7 @@ class Bill(Base, UUIDMixin, TimestampMixin):
     status        = Column(Enum(BillStatus), default=BillStatus.DRAFT, nullable=False)
     subtotal      = Column(Numeric(18,2), default=0)
     vat_rate      = Column(Numeric(5,2),  default=7)
+    vat_inclusive = Column(Boolean, nullable=False, default=False, server_default=sa_false())   # ราคารวม VAT
     vat_amount    = Column(Numeric(18,2), default=0)
     wht_rate      = Column(Numeric(5,2),  default=0)
     wht_amount    = Column(Numeric(18,2), default=0)
@@ -113,6 +118,11 @@ class BillItem(Base, UUIDMixin):
     unit        = Column(String(50),    nullable=True)
     unit_price  = Column(Numeric(18,4), nullable=False)
     amount      = Column(Numeric(18,2), nullable=False)
+    # Per-line VAT: the ประเภทภาษี picked for the line and its rate (null = the bill's rate)
+    tax_code_id = Column(UUIDType(),    ForeignKey("tax_codes.id"), nullable=True)
+    product_id  = Column(UUIDType(),    ForeignKey("products.id"), nullable=True)   # picked from สินค้า/บริการ
+    detail      = Column(Text,          nullable=True)   # the line's คำอธิบาย
+    vat_rate    = Column(Numeric(5,2),  nullable=True)
 
     bill = relationship("Bill", back_populates="items")
 

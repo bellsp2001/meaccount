@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 // ── Types ──────────────────────────────────────────────────────
 type TaxKind = 'vat' | 'wht'
@@ -70,8 +72,6 @@ export default function TaxTypesPage() {
   const saveError = (saveM.error as any)?.response?.data?.detail
   const isNew = editing === 'new'
 
-  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 480, maxHeight: '90vh', overflowY: 'auto' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -144,8 +144,9 @@ export default function TaxTypesPage() {
 
       {/* CREATE / EDIT MODAL */}
       {editing && (
-        <div style={overlay} onClick={() => setEditing(null)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setEditing(null)} label="กลับไปที่ประเภทภาษี" />
+          <div className="doc-panel-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>
                 {isNew ? 'เพิ่มประเภทภาษี' : <>แก้ไขประเภทภาษี <span style={{ fontFamily: 'monospace', color: 'var(--color-muted)' }}>{(editing as TaxCode).code}</span></>}
@@ -163,10 +164,10 @@ export default function TaxTypesPage() {
                 <div>
                   <label style={lbl}>ประเภท</label>
                   {isNew ? (
-                    <select {...register('kind')} style={{ ...inp, cursor: 'pointer' }}>
+                    <SearchSelect {...register('kind')} style={{ ...inp, cursor: 'pointer' }}>
                       <option value="vat">ภาษีมูลค่าเพิ่ม</option>
                       <option value="wht">หัก ณ ที่จ่าย</option>
-                    </select>
+                    </SearchSelect>
                   ) : (
                     <input readOnly value={KIND_META[(editing as TaxCode).kind].label} style={{ ...inp, opacity: 0.6 }} />
                   )}

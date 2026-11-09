@@ -5,6 +5,7 @@ from datetime import date
 from decimal import Decimal
 from models.sales import SalesDocType, SalesDocStatus
 from schemas.ar import CustomerResponse
+from schemas.accounting import DocumentBookRef
 
 
 # ── Line item ──────────────────────────────────────────────────
@@ -15,6 +16,10 @@ class SalesItemCreate(BaseModel):
     unit_price:   Decimal
     discount_pct: Decimal = Decimal("0")
     sequence:     int = 0
+    tax_code_id:  Optional[UUID] = None     # ประเภทภาษี (VAT) for this line — its rate wins
+    product_id:   Optional[UUID] = None     # the สินค้า/บริการ the line was picked from
+    detail:       Optional[str]  = None     # คำอธิบาย under the item name
+    vat_rate:     Optional[Decimal] = None  # the line's VAT %; None = the document's vat_rate
 
     @model_validator(mode="after")
     def calc_amount(self):
@@ -34,6 +39,10 @@ class SalesItemResponse(BaseModel):
     unit_price:   Decimal
     discount_pct: Decimal
     amount:       Decimal
+    tax_code_id:  Optional[UUID] = None
+    product_id:   Optional[UUID] = None     # the สินค้า/บริการ the line was picked from
+    detail:       Optional[str]  = None     # คำอธิบาย under the item name
+    vat_rate:     Optional[Decimal] = None
     model_config = {"from_attributes": True}
 
 
@@ -44,10 +53,12 @@ class SalesDocCreate(BaseModel):
     date:           date
     valid_until:    Optional[date] = None
     vat_rate:       Decimal = Decimal("7")
+    vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
     deposit_amount: Decimal = Decimal("0")
     note:           Optional[str] = None
     invoice_id:     Optional[UUID] = None   # credit/debit notes: the invoice being adjusted
     reason:         Optional[str] = None
+    book_id:        Optional[UUID] = None   # สมุดบันทึก — needed to confirm a deposit or note
     items:          List[SalesItemCreate]
 
     @field_validator("items")
@@ -76,6 +87,7 @@ class SalesDocResponse(BaseModel):
     status:         SalesDocStatus
     subtotal:       Decimal
     vat_rate:       Decimal
+    vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
     vat_amount:     Decimal
     total:          Decimal
     deposit_amount: Decimal
@@ -87,6 +99,8 @@ class SalesDocResponse(BaseModel):
     invoice_id:     Optional[UUID] = None
     invoice:        Optional[DocRef] = None
     reason:         Optional[str] = None
+    book_id:        Optional[UUID] = None
+    book:           Optional[DocumentBookRef] = None
     items:          List[SalesItemResponse] = []
     model_config = {"from_attributes": True}
 

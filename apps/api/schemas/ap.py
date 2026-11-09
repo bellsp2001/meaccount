@@ -88,6 +88,10 @@ class BillItemCreate(BaseModel):
     unit:        Optional[str] = None
     unit_price:  Decimal
     sequence:    int = 0
+    tax_code_id: Optional[UUID] = None     # ประเภทภาษี (VAT) for this line — its rate wins
+    product_id:  Optional[UUID] = None     # the สินค้า/บริการ the line was picked from
+    detail:      Optional[str]  = None     # คำอธิบาย under the item name
+    vat_rate:    Optional[Decimal] = None  # the line's VAT %; None = the bill's vat_rate
 
     @model_validator(mode="after")
     def calc_amount(self):
@@ -105,6 +109,10 @@ class BillItemResponse(BaseModel):
     unit:        Optional[str]
     unit_price:  Decimal
     amount:      Decimal
+    tax_code_id: Optional[UUID] = None
+    product_id:  Optional[UUID] = None
+    detail:      Optional[str]  = None
+    vat_rate:    Optional[Decimal] = None
     model_config = {"from_attributes": True}
 
 
@@ -117,6 +125,7 @@ class BillCreate(BaseModel):
     ref_number:   Optional[str] = None
     description:  str
     vat_rate:     Decimal = Decimal("7")
+    vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
     wht_rate:     Decimal = Decimal("0")
     note:         Optional[str] = None
     book_id:      Optional[UUID] = None   # สมุดบันทึก (expense side)
@@ -144,6 +153,7 @@ class BillResponse(BaseModel):
     status:        BillStatus
     subtotal:      Decimal
     vat_rate:      Decimal
+    vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
     vat_amount:    Decimal
     wht_rate:      Decimal
     wht_amount:    Decimal

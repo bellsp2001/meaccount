@@ -5,6 +5,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
 import type { User, UserRole } from '@/types'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 const ROLES = [
   { value: 'admin' as UserRole,      label: 'Admin',      color: '#F2714E' },
@@ -82,11 +84,11 @@ export default function UsersPage() {
       <div style={{ display:'flex', gap:10, flexWrap:'wrap' }}>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="🔍  ค้นหาชื่อหรืออีเมล..."
           style={{ flex:1, minWidth:200, background:'var(--color-card)', border:'1px solid var(--color-border)', borderRadius:9, padding:'9px 14px', fontSize:13, color:'var(--color-text)', outline:'none' }} />
-        <select value={filterRole} onChange={e=>setFilterRole(e.target.value as UserRole|'all')}
+        <SearchSelect value={filterRole} onChange={e=>setFilterRole(e.target.value as UserRole|'all')}
           style={{ background:'var(--color-card)', border:'1px solid var(--color-border)', borderRadius:9, padding:'9px 12px', fontSize:13, color:'var(--color-text)', outline:'none', cursor:'pointer' }}>
           <option value="all">ทุก Role</option>
           {ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}
-        </select>
+        </SearchSelect>
       </div>
 
       {/* Table */}
@@ -147,8 +149,9 @@ export default function UsersPage() {
 
       {/* CREATE MODAL */}
       {showCreate && (
-        <div style={overlay} onClick={()=>setShowCreate(false)}>
-          <div style={modal} onClick={e=>e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={()=>setShowCreate(false)} label="กลับไปที่ผู้ใช้" />
+          <div className="doc-panel-card">
             <div style={{ display:'flex',justifyContent:'space-between',alignItems:'center',padding:'18px 24px',borderBottom:'1px solid var(--color-border)' }}>
               <h3 style={{ margin:0,fontSize:16,fontWeight:800 }}>เพิ่มผู้ใช้ใหม่</h3>
               <button onClick={()=>setShowCreate(false)} style={{ background:'none',border:'none',color:'var(--color-muted)',cursor:'pointer',fontSize:18 }}>✕</button>
@@ -159,7 +162,7 @@ export default function UsersPage() {
               <div><label style={lbl}>รหัสผ่าน</label><input {...register('password')} type="password" placeholder="อย่างน้อย 8 ตัวอักษร" style={inp}/>{errors.password&&<p style={{ margin:'4px 0 0',fontSize:11,color:'#FF6B6B' }}>{errors.password.message}</p>}</div>
               <div>
                 <label style={lbl}>Role / สิทธิ์</label>
-                <select {...register('role')} style={{ ...inp,cursor:'pointer' }}>{ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}</select>
+                <SearchSelect {...register('role')} style={{ ...inp,cursor:'pointer' }}>{ROLES.map(r=><option key={r.value} value={r.value}>{r.label}</option>)}</SearchSelect>
               </div>
               {createM.isError&&<div style={{ background:'#FF6B6B12',border:'1px solid #FF6B6B35',borderRadius:8,padding:'10px 14px' }}><p style={{ margin:0,fontSize:12,color:'#FF6B6B' }}>เกิดข้อผิดพลาด กรุณาลองใหม่อีกครั้ง</p></div>}
               <div style={{ display:'flex',gap:10,justifyContent:'flex-end',paddingTop:4 }}>
