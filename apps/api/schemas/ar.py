@@ -63,6 +63,10 @@ class InvoiceItemCreate(BaseModel):
     unit_price:   Decimal
     discount_pct: Decimal = Decimal("0")
     sequence:     int = 0
+    tax_code_id:  Optional[UUID] = None     # ประเภทภาษี (VAT) for this line — its rate wins
+    product_id:   Optional[UUID] = None     # the สินค้า/บริการ the line was picked from
+    detail:       Optional[str]  = None     # คำอธิบาย under the item name
+    vat_rate:     Optional[Decimal] = None  # the line's VAT %; None = the invoice's vat_rate
 
     @model_validator(mode="after")
     def calc_amount(self):
@@ -82,6 +86,10 @@ class InvoiceItemResponse(BaseModel):
     unit_price:   Decimal
     discount_pct: Decimal
     amount:       Decimal
+    tax_code_id:  Optional[UUID] = None
+    product_id:   Optional[UUID] = None
+    detail:       Optional[str]  = None
+    vat_rate:     Optional[Decimal] = None
     model_config = {"from_attributes": True}
 
 
@@ -91,6 +99,7 @@ class InvoiceCreate(BaseModel):
     date:        date
     due_date:    Optional[date] = None    # auto-calc from credit_days if None
     vat_rate:    Decimal = Decimal("7")
+    vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
     note:        Optional[str] = None
     book_id:     Optional[UUID] = None    # สมุดบันทึก (income side)
     items:       List[InvoiceItemCreate]
@@ -113,6 +122,7 @@ class InvoiceResponse(BaseModel):
     status:      InvoiceStatus
     subtotal:    Decimal
     vat_rate:    Decimal
+    vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
     vat_amount:  Decimal
     total:       Decimal
     paid_amount: Decimal

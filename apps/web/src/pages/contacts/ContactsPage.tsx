@@ -2,7 +2,9 @@ import { useState } from 'react'
 import { NavLink, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
 import type { ContactGroup } from './ContactGroupsPage'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 // ผู้ติดต่อ — one record per business partner, with customer and supplier as roles.
 // The same page serves the full list and the customer-only / supplier-only views.
@@ -149,10 +151,10 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
           ))}
         </div>
         <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="ค้นหาชื่อ รหัส หรือเลขผู้เสียภาษี" aria-label="ค้นหาผู้ติดต่อ" style={{ ...inp, maxWidth:300 }} />
-        <select value={groupFilter} onChange={e=>setGroupFilter(e.target.value)} aria-label="กรองตามกลุ่มประเภทลูกค้า" style={{ ...inp, width:'auto', minWidth:160, cursor:'pointer' }}>
+        <SearchSelect value={groupFilter} onChange={e=>setGroupFilter(e.target.value)} aria-label="กรองตามกลุ่มประเภทลูกค้า" style={{ ...inp, width:'auto', minWidth:160, cursor:'pointer' }}>
           <option value="">ทุกกลุ่ม</option>
           {groups.map(g => <option key={g.id} value={g.id}>{g.name}{g.is_active ? '' : ' (ปิดใช้งาน)'}</option>)}
-        </select>
+        </SearchSelect>
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(170px,1fr))', gap:12 }}>
@@ -205,9 +207,9 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
       </div>
 
       {form && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }} onClick={close}>
-          <div role="dialog" aria-modal="true" aria-label={editing ? 'แก้ไขผู้ติดต่อ' : 'เพิ่มผู้ติดต่อ'} onClick={e=>e.stopPropagation()}
-            style={{ background:'var(--color-card)', border:'1px solid var(--color-border-strong)', borderRadius:16, width:'100%', maxWidth:720, maxHeight:'92vh', overflowY:'auto' }}>
+        <div className="doc-panel">
+          <PanelBack onClick={close} label="กลับไปที่รายชื่อผู้ติดต่อ" />
+          <div className="doc-panel-card" aria-label={editing ? 'แก้ไขผู้ติดต่อ' : 'เพิ่มผู้ติดต่อ'}>
             <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div>
                 <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>{editing ? `แก้ไข ${editing.code}` : 'เพิ่มผู้ติดต่อ'}</h3>
@@ -220,11 +222,11 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
                 <div style={{ gridColumn:'1 / -1' }}><label style={lbl}>ชื่อ *</label><input value={form.name} onChange={e=>set('name', e.target.value)} style={inp} placeholder="บริษัท / ร้าน / บุคคล" /></div>
                 <div>
                   <label style={lbl}>กลุ่มประเภทลูกค้า</label>
-                  <select value={form.group_id} onChange={e=>set('group_id', e.target.value)} style={{ ...inp, cursor:'pointer' }}>
+                  <SearchSelect value={form.group_id} onChange={e=>set('group_id', e.target.value)} style={{ ...inp, cursor:'pointer' }}>
                     <option value="">— ไม่ระบุ —</option>
                     {activeGroups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
                     {editing?.group && !activeGroups.some(g => g.id === editing.group!.id) && <option value={editing.group.id}>{editing.group.name} (ปิดใช้งาน)</option>}
-                  </select>
+                  </SearchSelect>
                 </div>
                 <div><label style={lbl}>ชื่อภาษาอังกฤษ</label><input value={form.name_en} onChange={e=>set('name_en', e.target.value)} style={inp} /></div>
                 <div><label style={lbl}>เลขประจำตัวผู้เสียภาษี</label><input value={form.tax_id} onChange={e=>set('tax_id', e.target.value.replace(/\D/g,'').slice(0,13))} inputMode="numeric" style={{ ...inp, fontFamily:'monospace' }} placeholder="13 หลัก" /></div>
@@ -255,10 +257,10 @@ export default function ContactsPage({ role }: { role?: ContactRole }) {
                     <div><label style={lbl}>เงื่อนไขจ่าย (วัน)</label><input type="number" min={0} max={365} value={form.payment_terms} onChange={e=>set('payment_terms', Number(e.target.value)||0)} style={inp} /></div>
                     <div>
                       <label style={lbl}>หัก ณ ที่จ่าย</label>
-                      <select value={form.wht_type} onChange={e=>set('wht_type', e.target.value)} style={{ ...inp, cursor:'pointer' }}>
+                      <SearchSelect value={form.wht_type} onChange={e=>set('wht_type', e.target.value)} style={{ ...inp, cursor:'pointer' }}>
                         <option value="">ไม่หัก</option><option value="1%">1% (ขนส่ง)</option>
                         <option value="3%">3% (บริการ)</option><option value="5%">5% (ค่าเช่า)</option>
-                      </select>
+                      </SearchSelect>
                     </div>
                     <div><label style={lbl}>ธนาคาร</label><input value={form.bank_name} onChange={e=>set('bank_name', e.target.value)} style={inp} /></div>
                     <div><label style={lbl}>เลขที่บัญชี</label><input value={form.bank_account} onChange={e=>set('bank_account', e.target.value)} style={{ ...inp, fontFamily:'monospace' }} /></div>

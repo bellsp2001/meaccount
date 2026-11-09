@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Warehouse { id: string; code: string; name: string }
 interface Shift { id: string; warehouse_id: string; status: string; opening_cash: number; sale_count?: number; total_sales?: number }
@@ -97,10 +98,10 @@ export default function POSTerminalPage() {
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', minHeight: '70vh', gap: 20 }}>
         <p style={{ fontSize: 48 }}>🏪</p>
         <p style={{ fontSize: 16, fontWeight: 700, color: 'var(--color-text-secondary)' }}>ยังไม่มีกะการขายที่เปิดอยู่</p>
-        <select value={warehouseId} onChange={e => setWarehouseId(e.target.value)}
+        <SearchSelect value={warehouseId} onChange={e => setWarehouseId(e.target.value)}
           style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 9, padding: '10px 16px', fontSize: 13, color: 'var(--color-text)', cursor: 'pointer' }}>
           {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
-        </select>
+        </SearchSelect>
         <button onClick={() => setShowOpenShift(true)} style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 14, border: 'none', borderRadius: 10, padding: '12px 28px', cursor: 'pointer' }}>
           ▶ เปิดกะการขาย
         </button>

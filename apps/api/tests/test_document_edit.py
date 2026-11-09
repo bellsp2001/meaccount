@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from core.database import Base, get_db
 from core.security import hash_password
 from models.user import User, UserRole
-from models.accounting import Account, AccountTypeEnum, NormalBalance
+from models.accounting import Account, AccountTypeEnum, NormalBalance, DocumentBook, BookSide, JournalType
 from main import app
 
 engine = create_engine("sqlite:///./test_document_edit.db", connect_args={"check_same_thread": False})
@@ -61,6 +61,20 @@ def acc(db):
 
 
 @pytest.fixture
+def books(db, acc):
+    """Income and expense สมุดบันทึก — confirming an invoice or bill needs one."""
+    a = {x.code: x for x in db.query(Account).all()}
+    out = {}
+    for key, code, side, jt, account, counter in (("income", "SALE", BookSide.INCOME, JournalType.SALES, "4101", "1201"),
+                                                  ("expense", "PURC", BookSide.EXPENSE, JournalType.PURCHASE, "5401", "2101")):
+        b = DocumentBook(code=code, name=code, side=side, journal_type=jt, account_id=a[account].id,
+                         counter_account_id=a[counter].id, is_active=True)
+        db.add(b); db.commit()
+        out[key] = str(b.id)
+    return out
+
+
+@pytest.fixture
 def customer(client, h):
     return client.post("/api/v1/ar/customers", json={"code": "C001", "name": "ลูกค้า ก"}, headers=h).json()
 
@@ -91,6 +105,24 @@ def test_edit_quotation(client, h, customer):
     assert client.put(f"/api/v1/ar/sales-documents/{doc['id']}", json=body, headers=h).status_code == 400
 
 
+def test_confirmed_document_is_locked(client, h, customer):
+    body = {"doc_type": "quotation", "customer_id": customer["id"], "date": "2025-03-01", "vat_rate": 7, "items": _items(1000)}
+    doc = client.post("/api/v1/ar/sales-documents", json=body, headers=h).json()
+    assert doc["status"] == "draft"
+    got = client.post(f"/api/v1/ar/sales-documents/{doc['id']}/status", params={"status": "accepted"}, headers=h).json()
+    assert got["status"] == "accepted"
+    assert client.put(f"/api/v1/ar/sales-documents/{doc['id']}", json=body, headers=h).status_code == 400
+    # A confirmed quotation still converts to a sales order.
+    assert client.post(f"/api/v1/ar/sales-documents/{doc['id']}/convert", headers=h).status_code == 200
+
+
+def test_deposit_confirms_only_by_posting(client, h, customer):
+    dep = client.post("/api/v1/ar/sales-documents", headers=h, json={
+        "doc_type": "deposit", "customer_id": customer["id"], "date": "2025-03-01", "vat_rate": 0,
+        "deposit_amount": 500, "items": _items(500)}).json()
+    assert client.post(f"/api/v1/ar/sales-documents/{dep['id']}/status", params={"status": "accepted"}, headers=h).status_code == 400
+
+
 def test_edit_purchase_order(client, h, supplier):
     body = {"doc_type": "purchase_order", "supplier_id": supplier["id"], "date": "2025-03-01", "vat_rate": 7, "items": _items(1000)}
     doc = client.post("/api/v1/ap/purchase-documents", json=body, headers=h).json()
@@ -102,8 +134,8 @@ def test_edit_purchase_order(client, h, supplier):
     assert client.put(f"/api/v1/ap/purchase-documents/{doc['id']}", json=body, headers=h).status_code == 400
 
 
-def test_edit_invoice_until_posted(client, h, acc, customer):
-    body = {"customer_id": customer["id"], "date": "2025-03-01", "vat_rate": 7, "items": _items(1000)}
+def test_edit_invoice_until_posted(client, h, books, customer):
+    body = {"customer_id": customer["id"], "date": "2025-03-01", "vat_rate": 7, "book_id": books["income"], "items": _items(1000)}
     inv = client.post("/api/v1/ar/invoices", json=body, headers=h).json()
     got = client.put(f"/api/v1/ar/invoices/{inv['id']}", json={**body, "items": _items(1000, 2)}, headers=h).json()
     assert got["number"] == inv["number"] and Decimal(got["total"]) == Decimal("2140.00")
@@ -113,8 +145,8 @@ def test_edit_invoice_until_posted(client, h, acc, customer):
     assert client.put(f"/api/v1/ar/invoices/{inv['id']}", json=body, headers=h).status_code == 400
 
 
-def test_edit_bill_draft_and_rejected(client, h, acc, supplier):
-    body = {"supplier_id": supplier["id"], "date": "2025-03-01", "description": "ค่าบริการ",
+def test_edit_bill_draft_and_rejected(client, h, books, supplier):
+    body = {"supplier_id": supplier["id"], "date": "2025-03-01", "description": "ค่าบริการ", "book_id": books["expense"],
             "vat_rate": 7, "wht_rate": 3, "items": _items(1000)}
     bill = client.post("/api/v1/ap/bills", json=body, headers=h).json()
     got = client.put(f"/api/v1/ap/bills/{bill['id']}", json={**body, "description": "ค่าบริการ (แก้)", "items": _items(2000)}, headers=h).json()

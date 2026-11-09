@@ -81,6 +81,16 @@ def resolve_book(db: Session, book_id: Optional[UUID], side: BookSide) -> Option
     return book
 
 
+def require_book(book: Optional[DocumentBook]) -> DocumentBook:
+    """Confirming a document that posts to GL needs its สมุดบันทึก — the book decides the
+    accounts and the journal. Quotations and orders don't post, so they don't need one."""
+    if book is None:
+        raise HTTPException(400, "เลือกสมุดบันทึกก่อนยืนยันเอกสาร")
+    if not book.is_active:
+        raise HTTPException(400, f"สมุด {book.code} ถูกปิดใช้งานอยู่ — เลือกสมุดอื่นก่อนยืนยันเอกสาร")
+    return book
+
+
 def get_document_books(db: Session, side: Optional[BookSide] = None) -> List[DocumentBook]:
     q = db.query(DocumentBook).options(
         joinedload(DocumentBook.account), joinedload(DocumentBook.counter_account), joinedload(DocumentBook.tax_code),

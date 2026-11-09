@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
 
 interface Company { id: string; code: string; name: string; name_en?: string; tax_id?: string; is_active: boolean; parent_company_id?: string }
 
@@ -22,8 +23,6 @@ export default function CompaniesPage() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['companies'] }); setShowCreate(false); setForm({ code: '', name: '', name_en: '', tax_id: '', address: '' }) },
   })
 
-  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 480 }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -57,8 +56,9 @@ export default function CompaniesPage() {
       </div>
 
       {showCreate && (
-        <div style={overlay} onClick={() => setShowCreate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowCreate(false)} label="กลับไปที่บริษัท" />
+          <div className="doc-panel-card">
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>เพิ่มบริษัทใหม่</h3>
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>

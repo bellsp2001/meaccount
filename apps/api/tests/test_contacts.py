@@ -192,13 +192,19 @@ def test_group_in_use_cannot_be_deleted(client, h):
 
 
 def test_open_balances(client, h, db):
-    from models.accounting import Account, AccountTypeEnum, NormalBalance
+    from models.accounting import Account, AccountTypeEnum, NormalBalance, DocumentBook, BookSide, JournalType
+    accs = {}
     for code, t, nb in (("1201", AccountTypeEnum.ASSET, NormalBalance.DEBIT), ("4101", AccountTypeEnum.INCOME, NormalBalance.CREDIT),
                         ("2103", AccountTypeEnum.LIABILITY, NormalBalance.CREDIT)):
-        db.add(Account(code=code, name=code, account_type=t, normal_balance=nb, level=3))
+        accs[code] = Account(code=code, name=code, account_type=t, normal_balance=nb, level=3)
+        db.add(accs[code])
     db.commit()
+    book = DocumentBook(code="SALE", name="ขาย", side=BookSide.INCOME, journal_type=JournalType.SALES,
+                        account_id=accs["4101"].id, counter_account_id=accs["1201"].id, is_active=True)
+    db.add(book); db.commit()
     c = _create(client, h, name="บริษัท ก", customer={}, supplier={}).json()
     inv = client.post("/api/v1/ar/invoices", json={"customer_id": c["customer"]["id"], "date": "2025-03-01", "vat_rate": 7,
+                      "book_id": str(book.id),
                       "items": [{"description": "x", "quantity": 1, "unit_price": 1000}]}, headers=h).json()
     client.post(f"/api/v1/ar/invoices/{inv['id']}/post-gl", headers=h)
     got = client.get(f"/api/v1/contacts/{c['id']}", headers=h).json()

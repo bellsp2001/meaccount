@@ -11,9 +11,10 @@ from fastapi import HTTPException
 
 from models.ap import (Supplier, Bill, BillItem, APPayment,
                        ApprovalRecord, BillStatus, ExpenseCategory)
-from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
+from models.accounting import Account, BookSide, DocumentBook, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
-from services.document_books import resolve_book
+from services.document_books import resolve_book, require_book
+from services.vat import document_totals
 from services.contacts import link_role, sync_from_role
 from schemas.ap import (SupplierCreate, SupplierUpdate,
                         BillCreate, APPaymentCreate, ApprovalAction)
@@ -97,6 +98,11 @@ def next_bill_number(db: Session, bill_date: date) -> str:
 
 # ── Bill CRUD ──────────────────────────────────────────────────
 
+def _bill_item_fields(it) -> dict:
+    return dict(description=it.description, quantity=it.quantity, unit=it.unit, unit_price=it.unit_price,
+                amount=it.amount, tax_code_id=it.tax_code_id, vat_rate=it.vat_rate, product_id=it.product_id, detail=it.detail)
+
+
 def create_bill(db: Session, payload: BillCreate, user_id: Optional[UUID] = None) -> Bill:
     if payload.supplier_id:
         sup = db.query(Supplier).filter(Supplier.id == payload.supplier_id).first()
@@ -110,9 +116,8 @@ def create_bill(db: Session, payload: BillCreate, user_id: Optional[UUID] = None
 
     resolve_book(db, payload.book_id, BookSide.EXPENSE)
 
-    subtotal   = sum(it.amount for it in payload.items)
-    vat_amount = (subtotal * payload.vat_rate / 100).quantize(Decimal("0.01"))
-    total      = subtotal + vat_amount
+    # VAT per line, inclusive or exclusive (services.vat); WHT is on the amount before VAT.
+    subtotal, vat_amount, total, vat_rate = document_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
     wht_amount = (subtotal * payload.wht_rate / 100).quantize(Decimal("0.01"))
     net_payable= total - wht_amount
 
@@ -121,7 +126,7 @@ def create_bill(db: Session, payload: BillCreate, user_id: Optional[UUID] = None
         supplier_id=payload.supplier_id, category_id=payload.category_id,
         date=payload.date, due_date=due,
         ref_number=payload.ref_number, description=payload.description,
-        vat_rate=payload.vat_rate, vat_amount=vat_amount,
+        vat_rate=vat_rate, vat_amount=vat_amount, vat_inclusive=payload.vat_inclusive,
         wht_rate=payload.wht_rate, wht_amount=wht_amount,
         subtotal=subtotal, total=total,
         net_payable=net_payable, paid_amount=Decimal("0"), balance_due=net_payable,
@@ -130,11 +135,7 @@ def create_bill(db: Session, payload: BillCreate, user_id: Optional[UUID] = None
     db.add(bill); db.flush()
 
     for i, it in enumerate(payload.items):
-        db.add(BillItem(
-            bill_id=bill.id, sequence=i,
-            description=it.description, quantity=it.quantity,
-            unit=it.unit, unit_price=it.unit_price, amount=it.amount,
-        ))
+        db.add(BillItem(bill_id=bill.id, sequence=i, **_bill_item_fields(it)))
 
     db.commit(); db.refresh(bill)
     return bill
@@ -155,19 +156,17 @@ def update_bill(db: Session, bill_id: UUID, payload: BillCreate) -> Bill:
         terms = 30
     resolve_book(db, payload.book_id, BookSide.EXPENSE)
 
-    subtotal   = sum(it.amount for it in payload.items)
-    vat_amount = (subtotal * payload.vat_rate / 100).quantize(Decimal("0.01"))
+    subtotal, vat_amount, total, vat_rate = document_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
     wht_amount = (subtotal * payload.wht_rate / 100).quantize(Decimal("0.01"))
+    bill.vat_inclusive = payload.vat_inclusive
     bill.supplier_id, bill.category_id, bill.book_id = payload.supplier_id, payload.category_id, payload.book_id
     bill.date, bill.due_date = payload.date, payload.due_date or (payload.date + timedelta(days=terms))
     bill.ref_number, bill.description, bill.note = payload.ref_number, payload.description, payload.note
-    bill.vat_rate, bill.vat_amount, bill.wht_rate, bill.wht_amount = payload.vat_rate, vat_amount, payload.wht_rate, wht_amount
-    bill.subtotal, bill.total = subtotal, subtotal + vat_amount
+    bill.vat_rate, bill.vat_amount, bill.wht_rate, bill.wht_amount = vat_rate, vat_amount, payload.wht_rate, wht_amount
+    bill.subtotal, bill.total = subtotal, total
     bill.net_payable = bill.balance_due = bill.total - wht_amount
     bill.status = BillStatus.DRAFT
-    bill.items = [BillItem(sequence=i, description=it.description, quantity=it.quantity, unit=it.unit,
-                           unit_price=it.unit_price, amount=it.amount)
-                  for i, it in enumerate(payload.items)]
+    bill.items = [BillItem(sequence=i, **_bill_item_fields(it)) for i, it in enumerate(payload.items)]
     db.commit(); db.refresh(bill)
     return bill
 
@@ -188,6 +187,7 @@ def submit_for_approval(db: Session, bill_id: UUID, user_id: Optional[UUID] = No
     bill = _get_bill_or_404(db, bill_id)
     if bill.status != BillStatus.DRAFT:
         raise HTTPException(400, "เฉพาะ Bill ที่เป็น Draft เท่านั้นที่ส่งขออนุมัติได้")
+    require_book(bill.book)   # submitting is how a bill is confirmed
     bill.status = BillStatus.PENDING
     db.commit(); db.refresh(bill)
     return bill
@@ -224,6 +224,7 @@ def post_bill_to_gl(db: Session, bill_id: UUID, user_id: Optional[UUID] = None) 
         raise HTTPException(400, "Bill นี้ Post ไป GL แล้ว")
     if bill.status not in (BillStatus.APPROVED, BillStatus.DRAFT):
         raise HTTPException(400, "Bill ต้องอยู่ในสถานะ Approved หรือ Draft ก่อน Post GL")
+    require_book(bill.book)
 
     ap_acc, exp_acc, vat_acc, journal_type = bill_posting_accounts(db, bill)
     wht_acc   = _find_acc(db, ["2104","21"])      # WHT Payable
@@ -251,12 +252,13 @@ def post_bill_to_gl(db: Session, bill_id: UUID, user_id: Optional[UUID] = None) 
     return bill
 
 
-def bill_posting_accounts(db: Session, bill: Bill):
-    """(เจ้าหนี้, ค่าใช้จ่าย, VAT ซื้อ, journal type) a bill posts to — shared with credit/debit notes.
+def bill_posting_accounts(db: Session, bill: Bill, book: Optional[DocumentBook] = None):
+    """(เจ้าหนี้, ค่าใช้จ่าย, VAT ซื้อ, journal type) a bill posts to — shared with credit/debit notes,
+    which pass their own book.
 
-    A สมุดบันทึก on the bill overrides the default mapping: its expense account (ahead of the
-    bill's category), its counter account (เจ้าหนี้ or เงินสด) and its journal."""
-    book = bill.book
+    A สมุดบันทึก (the given one, else the bill's) overrides the default mapping: its expense
+    account (ahead of the bill's category), its counter account (เจ้าหนี้ or เงินสด) and its journal."""
+    book = book or bill.book
     ap_acc  = (book and book.counter_account) or _find_acc(db, ["2101","21"])
     vat_acc = _find_acc(db, ["1401","14"])
     journal_type = book.journal_type if book else JournalType.PURCHASE

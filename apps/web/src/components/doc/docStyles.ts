@@ -27,4 +27,19 @@ export const docFooter: CSSProperties = {
   display:'flex', gap:8, justifyContent:'flex-end', alignItems:'center', flexWrap:'wrap', paddingTop:16, borderTop:'1px solid var(--color-border)',
 }
 
+// "← กลับ" above a document card or form panel — a real button, not a bare text link.
+export const docBackBtn: CSSProperties = {
+  alignSelf:'flex-start', display:'inline-flex', alignItems:'center', gap:6,
+  background:'color-mix(in srgb, var(--color-accent) 12%, var(--color-card))',
+  border:'1px solid color-mix(in srgb, var(--color-accent) 45%, transparent)', borderRadius:9,
+  padding:'8px 16px', fontSize:13, fontWeight:700, color:'var(--color-accent)', cursor:'pointer',
+  boxShadow:'0 1px 3px rgba(0,0,0,.08)', transition:'background .15s, color .15s',
+}
+
 export const docLockedNote: CSSProperties = { marginRight:'auto', fontSize:11, color:'var(--color-dim)' }
+
+// A footer button that can't be used yet (e.g. confirm before a สมุดบันทึก is chosen).
+export const docDisabled: CSSProperties = { opacity:0.45, cursor:'not-allowed' }
+
+// Shown in the footer when a document needs a สมุดบันทึก before it can be confirmed.
+export const docNeedsBookNote: CSSProperties = { marginRight:'auto', fontSize:11, color:'#C77700' }

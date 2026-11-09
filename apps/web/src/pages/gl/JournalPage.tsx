@@ -8,13 +8,18 @@ import api from '@/lib/api'
 import { JOURNAL_TYPES, JOURNAL_TYPE_META, isJournalType, type JournalType } from '@/config/journals'
 import { JournalTypeBadge as TypeBadge } from '@/components/ui/JournalTypeBadge'
 import DocCard from '@/components/doc/DocCard'
-import { docBadge, docPrimaryBtn, docCancelBtn, docFooter, docLockedNote } from '@/components/doc/docStyles'
+import { docBadge, docActionBtn, docPrimaryBtn, docCancelBtn, docFooter, docLockedNote } from '@/components/doc/docStyles'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Account { id: string; code: string; name: string; account_type: string; normal_balance: string }
 interface JEntry  { id: string; account_id: string; account_code?: string; account_name?: string; debit: number; credit: number; description?: string }
 interface Journal { id: string; number: string; date: string; description: string; reference?: string; journal_type: JournalType; status: 'draft'|'posted'|'reversed'; entries: JEntry[]; total_debit?: number; total_credit?: number; ai_suggested?: boolean }
 
 const TYPE_META = JOURNAL_TYPE_META
+const errText = (e: unknown, fallback: string) => {
+  const d = (e as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail
+  return typeof d === 'string' ? d : fallback
+}
 const localToday = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` }
 
 const entrySchema = z.object({
@@ -38,7 +43,7 @@ const journalSchema = z.object({
 type JForm = z.infer<typeof journalSchema>
 
 const STATUS_META: Record<string,{label:string;color:string}> = {
-  draft:    { label: 'Draft',    color: '#F5A623' },
+  draft:    { label: 'ฉบับร่าง', color: '#F5A623' },
   posted:   { label: 'Posted',   color: '#43E97B' },
   reversed: { label: 'Reversed', color: '#FF6B6B' },
 }
@@ -72,13 +77,22 @@ export default function JournalPage() {
     queryFn: async () => (await api.get('/api/v1/accounts/')).data,
   })
 
+  // Record as a draft, or record and confirm (post) in one go. If recording works but
+  // posting fails, the journal stays a draft and opens with the reason.
+  const [actionError, setActionError] = useState<string | null>(null)
   const createM = useMutation({
-    mutationFn: (d: JForm) => api.post('/api/v1/journals/', d),
-    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['journals'] }); openView(r.data) },   // recorded: show it
+    mutationFn: async ({ d, confirm }: { d: JForm; confirm: boolean }) => {
+      const { data: saved } = await api.post('/api/v1/journals/', d)
+      if (!confirm) return { j: saved as Journal, error: null }
+      try { return { j: (await api.post(`/api/v1/journals/${saved.id}/post`)).data as Journal, error: null } }
+      catch (e) { return { j: saved as Journal, error: errText(e, 'ยืนยันรายการไม่สำเร็จ') } }
+    },
+    onSuccess: ({ j, error }) => { qc.invalidateQueries({ queryKey: ['journals'] }); openView(j); setActionError(error) },   // recorded: show it
   })
   const postM = useMutation({
     mutationFn: (id: string) => api.post(`/api/v1/journals/${id}/post`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['journals'] }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['journals'] }); setActionError(null) },
+    onError: (e) => setActionError(errText(e, 'ยืนยันรายการไม่สำเร็จ')),
   })
 
   const { register, handleSubmit, control, reset, watch, setValue, formState: { errors } } = useForm<JForm>({
@@ -94,12 +108,12 @@ export default function JournalPage() {
   })
   const blankEntry = { account_id: '', debit: 0, credit: 0, description: '' }
   const openCreate = () => {
-    setViewJournal(null); setAiResult(null); createM.reset()
+    setViewJournal(null); setAiResult(null); createM.reset(); setActionError(null)
     reset({ journal_type: activeType ?? 'general', date: localToday(), description: '', reference: '', entries: [blankEntry, { ...blankEntry }] })
     setShowCreate(true)
   }
   const openView = (j: Journal) => {
-    setViewJournal(j); createM.reset()
+    setViewJournal(j); createM.reset(); setActionError(null)
     reset({ journal_type: j.journal_type, date: j.date, description: j.description, reference: j.reference ?? '',
             entries: j.entries.map(e => ({ account_id: e.account_id, debit: Number(e.debit), credit: Number(e.credit), description: e.description ?? '' })) })
     setShowCreate(true)
@@ -283,13 +297,13 @@ export default function JournalPage() {
               <TypeBadge type={current.journal_type} />
               <span style={docBadge(STATUS_META[current.status].color)}>{STATUS_META[current.status].label}</span>
             </>}>
-            <form onSubmit={handleSubmit(d => createM.mutate(d))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+            <form onSubmit={handleSubmit(d => createM.mutate({ d, confirm: false }))} style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
               <fieldset disabled={readOnly} className={`doc-form${readOnly ? ' doc-ro' : ''}`} style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
               <div>
                 <label style={{ display: 'block', fontSize: 11, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.1em', marginBottom: 7 }}>สมุดรายวัน</label>
-                <select {...register('journal_type')} style={{ ...inp, padding: '10px 12px', cursor: 'pointer' }}>
+                <SearchSelect {...register('journal_type')} style={{ ...inp, padding: '10px 12px', cursor: 'pointer' }}>
                   {JOURNAL_TYPES.map(t => <option key={t.key} value={t.key}>{t.full}</option>)}
-                </select>
+                </SearchSelect>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
@@ -330,10 +344,10 @@ export default function JournalPage() {
                       {fields.map((field, i) => (
                         <tr key={field.id}>
                           <td style={{ padding: '6px 8px', width: '35%' }}>
-                            <select {...register(`entries.${i}.account_id`)} style={{ ...inp, fontSize: 11 }}>
+                            <SearchSelect {...register(`entries.${i}.account_id`)} style={{ ...inp, fontSize: 11 }}>
                               <option value="">-- เลือกบัญชี --</option>
                               {accounts.map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
-                            </select>
+                            </SearchSelect>
                           </td>
                           <td style={{ padding: '6px 8px', width: '18%' }}>
                             <input {...register(`entries.${i}.debit`, { valueAsNumber: true })} type="number" min="0" step="0.01" placeholder="0.00"
@@ -373,15 +387,19 @@ export default function JournalPage() {
               </fieldset>
 
               {createM.isError && <div style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>เกิดข้อผิดพลาด กรุณาตรวจสอบข้อมูล</p></div>}
+              {current && actionError && <div role="alert" style={{ background: '#FF6B6B12', border: '1px solid #FF6B6B35', borderRadius: 8, padding: '10px 14px' }}><p style={{ margin: 0, fontSize: 12, color: '#FF6B6B' }}>{actionError}</p></div>}
               <div style={docFooter}>
                 {current ? <>
-                  {current.status !== 'draft' && <span style={docLockedNote}>รายการนี้ลงบัญชีแล้ว</span>}
-                  {current.status === 'draft' && <button type="button" onClick={() => postM.mutate(current.id)} style={docPrimaryBtn('#43E97B', '#2FBF63')}>✓ Post Journal</button>}
+                  {current.status !== 'draft' && <span style={docLockedNote}>รายการนี้ยืนยันและลงบัญชีแล้ว</span>}
+                  {current.status === 'draft' && <button type="button" disabled={postM.isPending} onClick={() => postM.mutate(current.id)}
+                    style={{ ...docPrimaryBtn('#43E97B', '#2FBF63'), opacity: postM.isPending ? 0.7 : 1 }}>{postM.isPending ? 'กำลังยืนยัน...' : '✓ ยืนยัน · Post'}</button>}
                 </> : <>
                   <button type="button" onClick={closeCard} style={docCancelBtn}>ยกเลิก</button>
                   <button type="submit" disabled={createM.isPending || !balanced}
-                    style={{ ...docPrimaryBtn('#FF9E80', '#F2714E'), ...(balanced ? {} : { background: 'var(--color-bg-inset)', color: 'var(--color-dim)', cursor: 'not-allowed' }), opacity: createM.isPending ? 0.7 : 1 }}>
-                    {createM.isPending ? 'กำลังบันทึก...' : 'บันทึก Journal'}
+                    style={{ ...docActionBtn('#F2714E'), ...(balanced ? {} : { color: 'var(--color-dim)', borderColor: 'var(--color-border)', cursor: 'not-allowed' }), opacity: createM.isPending ? 0.7 : 1 }}>บันทึกร่าง</button>
+                  <button type="button" disabled={createM.isPending || !balanced} onClick={handleSubmit(d => createM.mutate({ d, confirm: true }))}
+                    style={{ ...docPrimaryBtn('#43E97B', '#2FBF63'), ...(balanced ? {} : { background: 'var(--color-bg-inset)', color: 'var(--color-dim)', cursor: 'not-allowed' }), opacity: createM.isPending ? 0.7 : 1 }}>
+                    {createM.isPending ? 'กำลังบันทึก...' : '✓ บันทึกและยืนยัน · Post'}
                   </button>
                 </>}
               </div>

@@ -1,4 +1,5 @@
 import { useEffect, useRef, type ReactNode } from 'react'
+import { docBackBtn } from './docStyles'
 
 // A document's create/edit form or detail view, shown on a regular card in place of the
 // list (instead of a popup). The page renders either its list or one DocCard.
@@ -22,9 +23,8 @@ export default function DocCard({ title, subtitle, onBack, backLabel = 'กล�
 
   return (
     <div ref={ref} style={{ display:'flex', flexDirection:'column', gap:12 }}>
-      <button type="button" onClick={onBack}
-        style={{ alignSelf:'flex-start', background:'none', border:'none', padding:'2px 0', color:'var(--color-text-tertiary)', fontSize:12, fontWeight:700, cursor:'pointer' }}>
-        ← {backLabel}
+      <button type="button" onClick={onBack} className="doc-back" style={docBackBtn}>
+        <span aria-hidden>←</span> {backLabel}
       </button>
       <section style={{ background:'var(--color-card)', border:'1px solid var(--color-border)', borderRadius:14 }}>
         <header style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center', gap:12, flexWrap:'wrap' }}>

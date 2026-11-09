@@ -123,13 +123,13 @@ def test_invoice_book_without_counter_falls_back_to_receivable(client, h, acc, c
     assert ("1201", "dr") in lines and ("4102", "cr") in lines
 
 
-def test_invoice_without_book_unchanged(client, h, acc, customer):
+def test_invoice_without_book_cannot_be_confirmed(client, h, acc, customer):
+    # Saving a draft without a book is fine; confirming (posting) it is not.
     inv = _invoice(client, h, customer).json()
     assert inv["book"] is None
-    client.post(f"/api/v1/ar/invoices/{inv['id']}/post-gl", headers=h)
-    j, lines = _journal_for(client, h, inv["number"])
-    assert j["journal_type"] == "sales"
-    assert ("1201", "dr") in lines and ("4101", "cr") in lines
+    res = client.post(f"/api/v1/ar/invoices/{inv['id']}/post-gl", headers=h)
+    assert res.status_code == 400 and "สมุดบันทึก" in res.json()["detail"]
+    assert client.get("/api/v1/journals/", headers=h).json() == []
 
 
 def test_invoice_rejects_expense_book(client, h, acc, customer):
@@ -159,15 +159,23 @@ def test_bill_posts_through_book(client, h, acc):
     assert lines == {("5201", "dr"): Decimal("2000.00"), ("1401", "dr"): Decimal("140.00"), ("1101", "cr"): Decimal("2140.00")}
 
 
-def test_bill_without_book_unchanged(client, h, acc):
+def test_bill_without_book_cannot_be_confirmed(client, h, acc):
     bill = client.post("/api/v1/ap/bills", json={
         "date": "2025-03-01", "description": "ทั่วไป", "vat_rate": 0,
         "items": [{"description": "ของใช้", "quantity": 1, "unit_price": 500}],
     }, headers=h).json()
-    client.post(f"/api/v1/ap/bills/{bill['id']}/post-gl", headers=h)
-    j, lines = _journal_for(client, h, bill["number"])
-    assert j["journal_type"] == "purchase"
-    assert ("5401", "dr") in lines and ("2101", "cr") in lines
+    for action in ("submit", "post-gl"):
+        res = client.post(f"/api/v1/ap/bills/{bill['id']}/{action}", headers=h)
+        assert res.status_code == 400 and "สมุดบันทึก" in res.json()["detail"]
+    assert client.get("/api/v1/journals/", headers=h).json() == []
+
+
+def test_inactive_book_blocks_confirming(client, h, acc, customer):
+    book = _book(client, h, code="CASH", name="ขายสด", side="income", journal_type="receipt", account_id=str(acc["4101"].id))
+    inv = _invoice(client, h, customer, book["id"]).json()
+    client.patch(f"/api/v1/document-books/{book['id']}", json={"is_active": False}, headers=h)
+    res = client.post(f"/api/v1/ar/invoices/{inv['id']}/post-gl", headers=h)
+    assert res.status_code == 400 and "ปิดใช้งาน" in res.json()["detail"]
 
 
 def test_bill_rejects_income_book(client, h, acc):

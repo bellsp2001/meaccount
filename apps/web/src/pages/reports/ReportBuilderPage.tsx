@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation } from '@tanstack/react-query'
 import api from '@/lib/api'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface FieldMeta { key: string; label: string; type: string }
 interface CustomReportResult { columns: string[]; rows: Record<string, any>[]; total_rows: number }
@@ -59,9 +60,9 @@ export default function ReportBuilderPage() {
         {/* Builder panel */}
         <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, padding: '20px' }}>
           <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase' }}>1. แหล่งข้อมูล</p>
-          <select value={source} onChange={e => { setSource(e.target.value); setSelectedCols([]); setResult(null) }} style={{ ...inp, width: '100%', cursor: 'pointer', marginBottom: 20 }}>
+          <SearchSelect value={source} onChange={e => { setSource(e.target.value); setSelectedCols([]); setResult(null) }} style={{ ...inp, width: '100%', cursor: 'pointer', marginBottom: 20 }}>
             {SOURCES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-          </select>
+          </SearchSelect>
 
           <p style={{ margin: '0 0 10px', fontSize: 11, fontWeight: 700, color: 'var(--color-muted)', textTransform: 'uppercase' }}>2. เลือกคอลัมน์</p>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 20 }}>
@@ -80,12 +81,12 @@ export default function ReportBuilderPage() {
           </div>
           {filters.map((f, i) => (
             <div key={i} style={{ display: 'flex', gap: 4, marginBottom: 8 }}>
-              <select value={f.field} onChange={e => { const nf = [...filters]; nf[i].field = e.target.value; setFilters(nf) }} style={{ ...inp, fontSize: 10, flex: 1 }}>
+              <SearchSelect value={f.field} onChange={e => { const nf = [...filters]; nf[i].field = e.target.value; setFilters(nf) }} style={{ ...inp, fontSize: 10, flex: 1 }}>
                 {fields.map(fl => <option key={fl.key} value={fl.key}>{fl.label}</option>)}
-              </select>
-              <select value={f.operator} onChange={e => { const nf = [...filters]; nf[i].operator = e.target.value; setFilters(nf) }} style={{ ...inp, fontSize: 10, width: 60 }}>
+              </SearchSelect>
+              <SearchSelect value={f.operator} onChange={e => { const nf = [...filters]; nf[i].operator = e.target.value; setFilters(nf) }} style={{ ...inp, fontSize: 10, width: 60 }}>
                 <option value="eq">=</option><option value="gte">≥</option><option value="lte">≤</option><option value="contains">มี</option>
-              </select>
+              </SearchSelect>
               <input value={f.value} onChange={e => { const nf = [...filters]; nf[i].value = e.target.value; setFilters(nf) }} style={{ ...inp, fontSize: 10, flex: 1 }} />
               <button onClick={() => setFilters(filters.filter((_, j) => j !== i))} style={{ background: 'none', border: 'none', color: '#FF6B6B', cursor: 'pointer' }}>✕</button>
             </div>

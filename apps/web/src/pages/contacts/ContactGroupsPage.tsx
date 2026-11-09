@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
 
 // กลุ่มประเภทลูกค้า — groups (wholesale, retail, VIP…) a contact can be filed under.
 export interface ContactGroup {
@@ -92,9 +93,9 @@ export default function ContactGroupsPage() {
       </div>
 
       {form && (
-        <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }} onClick={close}>
-          <div role="dialog" aria-modal="true" aria-label={editing ? 'แก้ไขกลุ่ม' : 'เพิ่มกลุ่ม'} onClick={e=>e.stopPropagation()}
-            style={{ background:'var(--color-card)', border:'1px solid var(--color-border-strong)', borderRadius:16, width:'100%', maxWidth:480 }}>
+        <div className="doc-panel">
+          <PanelBack onClick={close} label="กลับไปที่กลุ่มประเภทลูกค้า" />
+          <div className="doc-panel-card" aria-label={editing ? 'แก้ไขกลุ่ม' : 'เพิ่มกลุ่ม'}>
             <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>{editing ? `แก้ไขกลุ่ม ${editing.code}` : 'เพิ่มกลุ่มประเภทลูกค้า'}</h3>
               <button onClick={close} aria-label="ปิด" style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>

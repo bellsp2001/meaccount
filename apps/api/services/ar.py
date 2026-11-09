@@ -12,7 +12,8 @@ from fastapi import HTTPException
 from models.ar import Customer, Invoice, InvoiceItem, Payment, InvoiceStatus, PaymentMethod
 from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
-from services.document_books import resolve_book
+from services.document_books import resolve_book, require_book
+from services.vat import document_totals
 from services.contacts import link_role, sync_from_role
 from schemas.ar import CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate
 
@@ -63,6 +64,11 @@ def next_invoice_number(db: Session, inv_date: date) -> str:
 
 # ── Invoice ────────────────────────────────────────────────────
 
+def _invoice_item_fields(it) -> dict:
+    return dict(description=it.description, quantity=it.quantity, unit=it.unit, unit_price=it.unit_price,
+                discount_pct=it.discount_pct, amount=it.amount, tax_code_id=it.tax_code_id, vat_rate=it.vat_rate, product_id=it.product_id, detail=it.detail)
+
+
 def create_invoice(db: Session, payload: InvoiceCreate, user_id: Optional[UUID] = None) -> Invoice:
     customer = db.query(Customer).filter(Customer.id == payload.customer_id).first()
     if not customer:
@@ -72,15 +78,13 @@ def create_invoice(db: Session, payload: InvoiceCreate, user_id: Optional[UUID] 
     resolve_book(db, payload.book_id, BookSide.INCOME)
     number = next_invoice_number(db, payload.date)
 
-    # Calc totals
-    subtotal = sum(item.amount for item in payload.items)
-    vat_amount = (subtotal * payload.vat_rate / 100).quantize(Decimal("0.01"))
-    total = subtotal + vat_amount
+    # Calc totals — VAT per line (each line's ประเภทภาษี), inclusive or exclusive; see services.vat
+    subtotal, vat_amount, total, vat_rate = document_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
 
     inv = Invoice(
         number=number, customer_id=payload.customer_id,
-        date=payload.date, due_date=due,
-        vat_rate=payload.vat_rate, subtotal=subtotal,
+        date=payload.date, due_date=due, vat_inclusive=payload.vat_inclusive,
+        vat_rate=vat_rate, subtotal=subtotal,
         vat_amount=vat_amount, total=total,
         paid_amount=Decimal("0"), balance_due=total,
         note=payload.note, created_by=user_id, book_id=payload.book_id,
@@ -88,12 +92,7 @@ def create_invoice(db: Session, payload: InvoiceCreate, user_id: Optional[UUID] 
     db.add(inv); db.flush()
 
     for i, it in enumerate(payload.items):
-        db.add(InvoiceItem(
-            invoice_id=inv.id, sequence=i,
-            description=it.description, quantity=it.quantity,
-            unit=it.unit, unit_price=it.unit_price,
-            discount_pct=it.discount_pct, amount=it.amount,
-        ))
+        db.add(InvoiceItem(invoice_id=inv.id, sequence=i, **_invoice_item_fields(it)))
 
     db.commit(); db.refresh(inv)
     return inv
@@ -112,15 +111,12 @@ def update_invoice(db: Session, invoice_id: UUID, payload: InvoiceCreate) -> Inv
         raise HTTPException(404, "ไม่พบลูกค้า")
     resolve_book(db, payload.book_id, BookSide.INCOME)
 
-    subtotal = sum(item.amount for item in payload.items)
-    vat_amount = (subtotal * payload.vat_rate / 100).quantize(Decimal("0.01"))
+    subtotal, vat_amount, total, vat_rate = document_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
     inv.customer_id, inv.date, inv.book_id, inv.note = payload.customer_id, payload.date, payload.book_id, payload.note
     inv.due_date = payload.due_date or (payload.date + timedelta(days=customer.credit_days))
-    inv.vat_rate, inv.subtotal, inv.vat_amount = payload.vat_rate, subtotal, vat_amount
-    inv.total = inv.balance_due = subtotal + vat_amount
-    inv.items = [InvoiceItem(sequence=i, description=it.description, quantity=it.quantity, unit=it.unit,
-                             unit_price=it.unit_price, discount_pct=it.discount_pct, amount=it.amount)
-                 for i, it in enumerate(payload.items)]
+    inv.vat_rate, inv.vat_inclusive, inv.subtotal, inv.vat_amount = vat_rate, payload.vat_inclusive, subtotal, vat_amount
+    inv.total = inv.balance_due = total
+    inv.items = [InvoiceItem(sequence=i, **_invoice_item_fields(it)) for i, it in enumerate(payload.items)]
     db.commit(); db.refresh(inv)
     return inv
 
@@ -133,13 +129,13 @@ def post_invoice_to_gl(db: Session, invoice_id: UUID, user_id: Optional[UUID] = 
     if inv.gl_posted:
         raise HTTPException(400, "Invoice นี้ Post ไป GL แล้ว")
 
-    # A สมุดบันทึก on the invoice overrides the default mapping: its income account, its counter
-    # account (ลูกหนี้ or เงินสด) and its journal. Anything it leaves blank falls back as before.
-    book = inv.book
-    ar_acc   = (book and book.counter_account) or _find_account(db, ["1201","1200","12"])
-    rev_acc  = (book and book.account) or _find_account(db, ["4101","4100","41"])
+    # Confirming (posting) needs a สมุดบันทึก: its income account, its counter account
+    # (ลูกหนี้ or เงินสด) and its journal. Anything it leaves blank falls back to the defaults.
+    book = require_book(inv.book)
+    ar_acc   = book.counter_account or _find_account(db, ["1201","1200","12"])
+    rev_acc  = book.account or _find_account(db, ["4101","4100","41"])
     vat_acc  = _find_account(db, ["2103","21"])
-    journal_type = book.journal_type if book else JournalType.SALES
+    journal_type = book.journal_type
 
     if not ar_acc or not rev_acc:
         raise HTTPException(400, "ไม่พบบัญชีลูกหนี้หรือรายได้ในผังบัญชี — กรุณาเพิ่มบัญชีก่อน")

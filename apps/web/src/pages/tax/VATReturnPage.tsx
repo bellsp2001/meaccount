@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface VATReturn {
   id: string; period_month: number; period_year: number; status: string
@@ -116,8 +118,9 @@ export default function VATReturnPage() {
 
       {/* GENERATE MODAL */}
       {showGenerate && (
-        <div style={overlay} onClick={() => setShowGenerate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowGenerate(false)} label="กลับไปที่ ภ.พ.30" />
+          <div className="doc-panel-card">
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>คำนวณ ภ.พ.30</h3>
               <button onClick={() => setShowGenerate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
@@ -126,15 +129,15 @@ export default function VATReturnPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 6 }}>เดือน</label>
-                  <select value={genMonth} onChange={e => setGenMonth(Number(e.target.value))} style={{ width: '100%', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
+                  <SearchSelect value={genMonth} onChange={e => setGenMonth(Number(e.target.value))} style={{ width: '100%', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
                     {MONTHS_TH.slice(1).map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-                  </select>
+                  </SearchSelect>
                 </div>
                 <div>
                   <label style={{ display: 'block', fontSize: 10, fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', marginBottom: 6 }}>ปี</label>
-                  <select value={genYear} onChange={e => setGenYear(Number(e.target.value))} style={{ width: '100%', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
+                  <SearchSelect value={genYear} onChange={e => setGenYear(Number(e.target.value))} style={{ width: '100%', background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '9px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
                     {[genYear - 1, genYear, genYear + 1].map(y => <option key={y} value={y}>{y + 543}</option>)}
-                  </select>
+                  </SearchSelect>
                 </div>
               </div>
 

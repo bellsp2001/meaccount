@@ -12,6 +12,7 @@ The actual Invoice / Payment (Tax Invoice / Receipt) live in models.ar — those
 stay authoritative; this module only handles the documents that precede them.
 """
 import enum
+from sqlalchemy.sql import false as sa_false
 from sqlalchemy import (Column, String, Numeric, Boolean, Enum, ForeignKey,
                         Text, Date, Integer)
 from sqlalchemy.orm import relationship
@@ -47,6 +48,7 @@ class SalesDocument(Base, UUIDMixin, TimestampMixin):
     status         = Column(Enum(SalesDocStatus), default=SalesDocStatus.DRAFT, nullable=False)
     subtotal       = Column(Numeric(18,2), default=0)
     vat_rate       = Column(Numeric(5,2),  default=7)
+    vat_inclusive = Column(Boolean, nullable=False, default=False, server_default=sa_false())   # ราคารวม VAT
     vat_amount     = Column(Numeric(18,2), default=0)
     total          = Column(Numeric(18,2), default=0)
     deposit_amount = Column(Numeric(18,2), default=0)       # amount received for deposit docs
@@ -60,10 +62,13 @@ class SalesDocument(Base, UUIDMixin, TimestampMixin):
     # Credit/debit notes: the issued invoice being adjusted, and why
     invoice_id     = Column(UUIDType(),    ForeignKey("invoices.id"), nullable=True, index=True)
     reason         = Column(String(500),   nullable=True)
+    # สมุดบันทึก (income side) — required to confirm a deposit or note, which post to GL
+    book_id        = Column(UUIDType(),    ForeignKey("document_books.id"), nullable=True)
     created_by     = Column(UUIDType(),    ForeignKey("users.id"), nullable=True)
 
     customer   = relationship("Customer")
     invoice    = relationship("Invoice", foreign_keys=[invoice_id])
+    book       = relationship("DocumentBook", foreign_keys=[book_id])
     items      = relationship("SalesDocumentItem", back_populates="document",
                               cascade="all, delete-orphan", lazy="joined",
                               order_by="SalesDocumentItem.sequence")
@@ -82,5 +87,10 @@ class SalesDocumentItem(Base, UUIDMixin):
     unit_price   = Column(Numeric(18,4), nullable=False)
     discount_pct = Column(Numeric(5,2),  default=0)
     amount       = Column(Numeric(18,2), nullable=False)
+    # Per-line VAT: the ประเภทภาษี picked for the line and its rate (null = the document's rate)
+    tax_code_id  = Column(UUIDType(),    ForeignKey("tax_codes.id"), nullable=True)
+    product_id   = Column(UUIDType(),    ForeignKey("products.id"), nullable=True)   # picked from สินค้า/บริการ
+    detail       = Column(Text,          nullable=True)   # the line's คำอธิบาย
+    vat_rate     = Column(Numeric(5,2),  nullable=True)
 
     document = relationship("SalesDocument", back_populates="items")
