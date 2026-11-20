@@ -114,6 +114,32 @@ def test_invoice_posts_through_book(client, h, acc, customer):
     assert lines == {("1101", "dr"): Decimal("1070.00"), ("4102", "cr"): Decimal("1000.00"), ("2103", "cr"): Decimal("70.00")}
 
 
+def test_after_vat_discount_posts_on_its_own_line(client, h, acc, customer):
+    # VAT 70 on the full 1,000; the 107 discount after VAT reduces revenue on its own line.
+    book = _book(client, h, code="SV", name="ใบแจ้งหนี้บริการ", side="income", journal_type="sales",
+                 account_id=str(acc["4102"].id))
+    inv = client.post("/api/v1/ar/invoices", headers=h, json={
+        "customer_id": customer["id"], "date": "2025-03-01", "vat_rate": 7, "book_id": book["id"],
+        "discount_value": 107, "discount_after_vat": True,
+        "items": [{"description": "บริการ", "quantity": 1, "unit_price": 1000}]}).json()
+    assert client.post(f"/api/v1/ar/invoices/{inv['id']}/post-gl", headers=h).status_code == 200
+    _, lines = _journal_for(client, h, inv["number"])
+    assert lines == {("1201", "dr"): Decimal("963.00"), ("4102", "dr"): Decimal("107.00"),
+                     ("4102", "cr"): Decimal("1000.00"), ("2103", "cr"): Decimal("70.00")}
+
+
+def test_bill_after_vat_discount_posts_on_its_own_line(client, h, acc):
+    book = _book(client, h, code="EX", name="ค่าใช้จ่าย", side="expense", journal_type="purchase",
+                 account_id=str(acc["5201"].id))
+    bill = client.post("/api/v1/ap/bills", headers=h, json={
+        "date": "2025-03-01", "description": "ค่าเช่า", "vat_rate": 7, "book_id": book["id"], "discount_value": 70, "discount_after_vat": True,
+        "items": [{"description": "ค่าเช่า", "quantity": 1, "unit_price": 1000}]}).json()
+    assert client.post(f"/api/v1/ap/bills/{bill['id']}/post-gl", headers=h).status_code == 200
+    _, lines = _journal_for(client, h, bill["number"])
+    assert lines == {("5201", "dr"): Decimal("1000.00"), ("1401", "dr"): Decimal("70.00"),
+                     ("2101", "cr"): Decimal("1000.00"), ("5201", "cr"): Decimal("70.00")}
+
+
 def test_invoice_book_without_counter_falls_back_to_receivable(client, h, acc, customer):
     book = _book(client, h, code="SV", name="ใบแจ้งหนี้บริการ", side="income", journal_type="sales",
                  account_id=str(acc["4102"].id))

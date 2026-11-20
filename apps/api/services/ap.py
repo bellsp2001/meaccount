@@ -14,7 +14,7 @@ from models.ap import (Supplier, Bill, BillItem, APPayment,
 from models.accounting import Account, BookSide, DocumentBook, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.document_books import resolve_book, require_book
-from services.vat import document_totals
+from services.vat import totals_fields, pricing_of, after_vat_discount
 from services.contacts import link_role, sync_from_role
 from schemas.ap import (SupplierCreate, SupplierUpdate,
                         BillCreate, APPaymentCreate, ApprovalAction)
@@ -116,19 +116,17 @@ def create_bill(db: Session, payload: BillCreate, user_id: Optional[UUID] = None
 
     resolve_book(db, payload.book_id, BookSide.EXPENSE)
 
-    # VAT per line, inclusive or exclusive (services.vat); WHT is on the amount before VAT.
-    subtotal, vat_amount, total, vat_rate = document_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
-    wht_amount = (subtotal * payload.wht_rate / 100).quantize(Decimal("0.01"))
-    net_payable= total - wht_amount
+    # VAT per line, VAT mode and bill discount (services.vat); WHT is on the amount before VAT.
+    totals     = totals_fields(db, payload.items, payload.vat_rate, **pricing_of(payload))
+    wht_amount = (totals["subtotal"] * payload.wht_rate / 100).quantize(Decimal("0.01"))
+    net_payable= totals["total"] - wht_amount
 
     bill = Bill(
         number=next_bill_number(db, payload.date),
         supplier_id=payload.supplier_id, category_id=payload.category_id,
         date=payload.date, due_date=due,
         ref_number=payload.ref_number, description=payload.description,
-        vat_rate=vat_rate, vat_amount=vat_amount, vat_inclusive=payload.vat_inclusive,
-        wht_rate=payload.wht_rate, wht_amount=wht_amount,
-        subtotal=subtotal, total=total,
+        **totals, wht_rate=payload.wht_rate, wht_amount=wht_amount,
         net_payable=net_payable, paid_amount=Decimal("0"), balance_due=net_payable,
         note=payload.note, created_by=user_id, book_id=payload.book_id,
     )
@@ -156,14 +154,13 @@ def update_bill(db: Session, bill_id: UUID, payload: BillCreate) -> Bill:
         terms = 30
     resolve_book(db, payload.book_id, BookSide.EXPENSE)
 
-    subtotal, vat_amount, total, vat_rate = document_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
-    wht_amount = (subtotal * payload.wht_rate / 100).quantize(Decimal("0.01"))
-    bill.vat_inclusive = payload.vat_inclusive
+    for k, v in totals_fields(db, payload.items, payload.vat_rate, **pricing_of(payload)).items():
+        setattr(bill, k, v)
+    wht_amount = (bill.subtotal * payload.wht_rate / 100).quantize(Decimal("0.01"))
     bill.supplier_id, bill.category_id, bill.book_id = payload.supplier_id, payload.category_id, payload.book_id
     bill.date, bill.due_date = payload.date, payload.due_date or (payload.date + timedelta(days=terms))
     bill.ref_number, bill.description, bill.note = payload.ref_number, payload.description, payload.note
-    bill.vat_rate, bill.vat_amount, bill.wht_rate, bill.wht_amount = vat_rate, vat_amount, payload.wht_rate, wht_amount
-    bill.subtotal, bill.total = subtotal, total
+    bill.wht_rate, bill.wht_amount = payload.wht_rate, wht_amount
     bill.net_payable = bill.balance_due = bill.total - wht_amount
     bill.status = BillStatus.DRAFT
     bill.items = [BillItem(sequence=i, **_bill_item_fields(it)) for i, it in enumerate(payload.items)]
@@ -238,6 +235,10 @@ def post_bill_to_gl(db: Session, bill_id: UUID, user_id: Optional[UUID] = None) 
                         "credit": Decimal("0"), "description": f"VAT Input {bill.number}"})
     entries.append({"account_id": ap_acc.id, "debit": Decimal("0"),
                     "credit": bill.total, "description": f"เจ้าหนี้ {bill.supplier.name if bill.supplier else ''} {bill.number}"})
+    # An after-VAT discount is not in the subtotal; it reduces the expense on its own line.
+    if after_vat_discount(bill):
+        entries.append({"account_id": exp_acc.id, "debit": Decimal("0"), "credit": after_vat_discount(bill),
+                        "description": f"ส่วนลดท้ายบิลหลัง VAT {bill.number}"})
     if wht_acc and bill.wht_amount > 0:
         entries.append({"account_id": ap_acc.id, "debit": bill.wht_amount,
                         "credit": Decimal("0"), "description": f"WHT หัก ณ ที่จ่าย {bill.number}"})

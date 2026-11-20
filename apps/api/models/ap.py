@@ -78,6 +78,10 @@ class Bill(Base, UUIDMixin, TimestampMixin):
     subtotal      = Column(Numeric(18,2), default=0)
     vat_rate      = Column(Numeric(5,2),  default=7)
     vat_inclusive = Column(Boolean, nullable=False, default=False, server_default=sa_false())   # ราคารวม VAT
+    discount_value  = Column(Numeric(18,2), nullable=False, default=0, server_default="0")   # ส่วนลดท้ายบิล as entered
+    discount_is_pct = Column(Boolean, nullable=False, default=False, server_default=sa_false())   # True = discount_value is %
+    discount_after_vat = Column(Boolean, nullable=False, default=False, server_default=sa_false())   # True = off the total after VAT
+    discount_amount = Column(Numeric(18,2), nullable=False, default=0, server_default="0")   # the bill discount in baht
     vat_amount    = Column(Numeric(18,2), default=0)
     wht_rate      = Column(Numeric(5,2),  default=0)
     wht_amount    = Column(Numeric(18,2), default=0)

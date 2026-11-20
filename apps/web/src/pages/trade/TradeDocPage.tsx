@@ -14,6 +14,7 @@ import { docBadge as badge, docActionBtn as footBtn, docPrimaryBtn, docCancelBtn
 import { DocumentBookSelect } from '@/components/books/DocumentBookSelect'
 import VatSelect from '@/components/doc/VatSelect'
 import VatModeSelect from '@/components/doc/VatModeSelect'
+import BillDiscountRow from '@/components/doc/BillDiscountRow'
 import ProductInput from '@/components/doc/ProductInput'
 import { useProducts, productPrice, type ProductOption } from '@/components/doc/products'
 import { useVatCodes, defaultVatCodeId, vatRateOf, vatCodeForLine, documentTotals } from '@/components/doc/vat'
@@ -32,7 +33,7 @@ interface TradeDoc {
   id: string; number: string; doc_type: DocType
   customer?: Party; supplier?: Party
   date: string; valid_until?: string; status: string
-  subtotal: number; vat_rate: number; vat_amount: number; total: number; deposit_amount: number; vat_inclusive?: boolean
+  subtotal: number; vat_rate: number; vat_amount: number; total: number; deposit_amount: number; vat_inclusive?: boolean; discount_value?: number; discount_is_pct?: boolean; discount_after_vat?: boolean; discount_amount?: number
   ref_number?: string; note?: string; reason?: string; gl_posted: boolean
   converted_to_type?: string
   invoice_id?: string; bill_id?: string
@@ -95,6 +96,9 @@ const docSchema = z.object({
   valid_until:    z.string().optional(),
   deposit_amount: z.number().min(0).optional(),
   vat_mode:       z.enum(['exclusive', 'inclusive']),
+  discount_value: z.number().min(0).catch(0),   // ส่วนลดท้ายบิล
+  discount_type:  z.enum(['amount', 'pct']),
+  discount_timing: z.enum(['before', 'after']),   // ส่วนลดก่อน / หลัง VAT
   ref_number:     z.string().optional(),
   reason:         z.string().optional(),
   note:           z.string().optional(),
@@ -172,7 +176,7 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
   // the document stays a draft and opens with the reason.
   const createM  = useMutation({
     mutationFn: async ({ d, confirm }: { d: DForm; confirm: boolean }) => {
-      const { party_id, ref_id, vat_mode, ...rest } = d
+      const { party_id, ref_id, vat_mode, discount_type, discount_timing, ...rest } = d
       // Each line carries its own VAT; the header rate is just the first line's, for display.
       const items = d.items.map(it => ({ ...it, tax_code_id: it.tax_code_id || undefined, product_id: it.product_id || undefined, detail: it.detail || undefined, vat_rate: vatRateOf(vatCodes, it.tax_code_id) }))
       const body = {
@@ -180,7 +184,7 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
         ...(isNote ? { [s.refKey]: ref_id || undefined } : {}),
         valid_until: d.valid_until || undefined,
         book_id: d.book_id || undefined,
-        items, vat_rate: items[0]?.vat_rate ?? 0, vat_inclusive: vat_mode === 'inclusive',
+        items, vat_rate: items[0]?.vat_rate ?? 0, vat_inclusive: vat_mode === 'inclusive', discount_is_pct: discount_type === 'pct', discount_after_vat: discount_timing === 'after', discount_value: d.discount_value || 0,
       }
       const { data: saved } = openDoc ? await api.put(`${s.docs}/${openDoc.id}`, body) : await api.post(s.docs, body)
       if (!confirm) return { doc: saved as TradeDoc, error: null }
@@ -202,14 +206,14 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
   const newLine = () => ({ description:'', quantity:1, unit:'', unit_price:0, discount_pct:0, tax_code_id: isDeposit ? '' : defaultVatCodeId(vatCodes), product_id: '', detail: '' })
   const blankForm = (): DForm => ({
     party_id: '', ref_id: '', date: localToday(), valid_until: '', deposit_amount: 0,
-    ref_number: '', reason: '', note: '', book_id: '', vat_mode: 'exclusive', items: [newLine()],
+    ref_number: '', reason: '', note: '', book_id: '', vat_mode: 'exclusive', discount_value: 0, discount_type: 'amount', discount_timing: 'before', items: [newLine()],
   })
   const docForm = (d: TradeDoc): DForm => ({
     party_id: (side === 'sales' ? d.customer : d.supplier)?.id ?? '',
     ref_id: (side === 'sales' ? d.invoice_id : d.bill_id) ?? '',
     date: d.date, valid_until: d.valid_until ?? '', deposit_amount: Number(d.deposit_amount),
     ref_number: d.ref_number ?? '', reason: d.reason ?? '', note: d.note ?? '', book_id: d.book_id ?? '',
-    vat_mode: d.vat_inclusive ? 'inclusive' : 'exclusive',
+    vat_mode: d.vat_inclusive ? 'inclusive' : 'exclusive', discount_value: Number(d.discount_value ?? 0), discount_type: d.discount_is_pct ? 'pct' : 'amount', discount_timing: d.discount_after_vat ? 'after' : 'before',
     items: d.items.map(it => ({ description: it.description, quantity: Number(it.quantity), unit: it.unit ?? '',
                                 unit_price: Number(it.unit_price), discount_pct: Number(it.discount_pct),
                                 tax_code_id: vatCodeForLine(vatCodes, it.tax_code_id, it.vat_rate ?? d.vat_rate), product_id: it.product_id ?? '', detail: it.detail ?? '' })),
@@ -234,8 +238,9 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
   const watchItems = watch('items')
   const watchParty = watch('party_id')
   const lineAmount = (it: Partial<DForm['items'][number]>) => (Number(it.quantity)||0)*(Number(it.unit_price)||0)*(1-(Number(it.discount_pct)||0)/100)
-  const { subtotal, vat: vatAmt, total } = documentTotals(vatCodes,
-    watchItems.map(it => ({ amount: lineAmount(it), codeId: it.tax_code_id })), watch('vat_mode'))
+  const { base: discountBase, discount: discountAmt, subtotal, vat: vatAmt, total } = documentTotals(vatCodes,
+    watchItems.map(it => ({ amount: lineAmount(it), codeId: it.tax_code_id })), watch('vat_mode'),
+    Number(watch('discount_value')), watch('discount_type'), watch('discount_timing'))
   // Picking a สินค้า/บริการ for a line fills its unit and price.
   const pickProduct = (i: number, p: ProductOption) => {
     setValue(`items.${i}.description`, p.name)
@@ -436,12 +441,16 @@ export default function TradeDocPage({ side, docType }: { side: Side; docType: D
               {/* Totals */}
               <div style={{ display:'flex', justifyContent:'flex-end' }}>
                 <div style={{ background:'var(--color-bg-inset)', border:'1px solid var(--color-border)', borderRadius:10, padding:'14px 20px', minWidth:240 }}>
-                  {[['ยอดก่อน VAT', baht(subtotal), 'var(--color-text)'],
-                    ['ภาษีมูลค่าเพิ่ม (VAT)', baht(vatAmt), '#F5A623']].map(([l,v,c])=>(
-                    <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:12 }}>
-                      <span style={{ color:'var(--color-text-tertiary)' }}>{l}</span><span style={{ color:c }}>{v}</span>
-                    </div>
-                  ))}
+                  <BillDiscountRow valueField={register('discount_value', { valueAsNumber: true })} typeField={register('discount_type')}
+                    timingField={register('discount_timing')} afterVat={watch('discount_timing') === 'after'}
+                    base={discountBase} discount={discountAmt} readOnly={readOnly} hasDiscount={discountAmt > 0} inputStyle={inp}>
+                    {[['ยอดก่อน VAT', baht(subtotal), 'var(--color-text)'],
+                      ['ภาษีมูลค่าเพิ่ม (VAT)', baht(vatAmt), '#F5A623']].map(([l,v,c])=>(
+                      <div key={l} style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:12 }}>
+                        <span style={{ color:'var(--color-text-tertiary)' }}>{l}</span><span style={{ color:c }}>{v}</span>
+                      </div>
+                    ))}
+                  </BillDiscountRow>
                   <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0 0', borderTop:'1px solid var(--color-border-strong)', marginTop:4 }}>
                     <span style={{ fontSize:13, fontWeight:700 }}>{isNote ? (docType === 'credit_note' ? 'ยอดลดหนี้' : 'ยอดเพิ่มหนี้') : 'ยอดรวมทั้งสิ้น'}</span>
                     <span style={{ fontSize:16, fontWeight:800, color:cfg.accent }}>{baht(total)}</span>

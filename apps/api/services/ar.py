@@ -13,7 +13,7 @@ from models.ar import Customer, Invoice, InvoiceItem, Payment, InvoiceStatus, Pa
 from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.document_books import resolve_book, require_book
-from services.vat import document_totals
+from services.vat import totals_fields, pricing_of, after_vat_discount
 from services.contacts import link_role, sync_from_role
 from schemas.ar import CustomerCreate, CustomerUpdate, InvoiceCreate, PaymentCreate
 
@@ -78,15 +78,13 @@ def create_invoice(db: Session, payload: InvoiceCreate, user_id: Optional[UUID] 
     resolve_book(db, payload.book_id, BookSide.INCOME)
     number = next_invoice_number(db, payload.date)
 
-    # Calc totals — VAT per line (each line's ประเภทภาษี), inclusive or exclusive; see services.vat
-    subtotal, vat_amount, total, vat_rate = document_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
+    # Calc totals — VAT per line (each line's ประเภทภาษี), VAT mode and bill discount; see services.vat
+    totals = totals_fields(db, payload.items, payload.vat_rate, **pricing_of(payload))
 
     inv = Invoice(
         number=number, customer_id=payload.customer_id,
-        date=payload.date, due_date=due, vat_inclusive=payload.vat_inclusive,
-        vat_rate=vat_rate, subtotal=subtotal,
-        vat_amount=vat_amount, total=total,
-        paid_amount=Decimal("0"), balance_due=total,
+        date=payload.date, due_date=due, **totals,
+        paid_amount=Decimal("0"), balance_due=totals["total"],
         note=payload.note, created_by=user_id, book_id=payload.book_id,
     )
     db.add(inv); db.flush()
@@ -111,11 +109,11 @@ def update_invoice(db: Session, invoice_id: UUID, payload: InvoiceCreate) -> Inv
         raise HTTPException(404, "ไม่พบลูกค้า")
     resolve_book(db, payload.book_id, BookSide.INCOME)
 
-    subtotal, vat_amount, total, vat_rate = document_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
+    for k, v in totals_fields(db, payload.items, payload.vat_rate, **pricing_of(payload)).items():
+        setattr(inv, k, v)
+    inv.balance_due = inv.total
     inv.customer_id, inv.date, inv.book_id, inv.note = payload.customer_id, payload.date, payload.book_id, payload.note
     inv.due_date = payload.due_date or (payload.date + timedelta(days=customer.credit_days))
-    inv.vat_rate, inv.vat_inclusive, inv.subtotal, inv.vat_amount = vat_rate, payload.vat_inclusive, subtotal, vat_amount
-    inv.total = inv.balance_due = total
     inv.items = [InvoiceItem(sequence=i, **_invoice_item_fields(it)) for i, it in enumerate(payload.items)]
     db.commit(); db.refresh(inv)
     return inv
@@ -144,6 +142,10 @@ def post_invoice_to_gl(db: Session, invoice_id: UUID, user_id: Optional[UUID] = 
         {"account_id": ar_acc.id,  "debit": inv.total, "credit": Decimal("0"), "description": f"ลูกหนี้ {inv.customer.name} {inv.number}"},
         {"account_id": rev_acc.id, "debit": Decimal("0"), "credit": inv.subtotal, "description": f"รายได้ {inv.number}"},
     ]
+    # An after-VAT discount is not in the subtotal; it reduces the revenue on its own line.
+    if after_vat_discount(inv):
+        entries_data.append({"account_id": rev_acc.id, "debit": after_vat_discount(inv), "credit": Decimal("0"),
+                             "description": f"ส่วนลดท้ายบิลหลัง VAT {inv.number}"})
     if vat_acc and inv.vat_amount > 0:
         entries_data.append({"account_id": vat_acc.id, "debit": Decimal("0"), "credit": inv.vat_amount, "description": f"VAT Output {inv.number}"})
 

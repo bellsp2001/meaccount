@@ -14,6 +14,7 @@ import { docBadge, docActionBtn, docPrimaryBtn, docCancelBtn, docFooter, docLock
 import { DocumentBookSelect, useDocumentBooks } from '@/components/books/DocumentBookSelect'
 import VatSelect from '@/components/doc/VatSelect'
 import VatModeSelect from '@/components/doc/VatModeSelect'
+import BillDiscountRow from '@/components/doc/BillDiscountRow'
 import ProductInput from '@/components/doc/ProductInput'
 import { useProducts, productPrice, type ProductOption } from '@/components/doc/products'
 import { useVatCodes, defaultVatCodeId, vatRateOf, vatCodeForLine, documentTotals } from '@/components/doc/vat'
@@ -25,7 +26,7 @@ interface InvoiceItem { id: string; description: string; quantity: number; unit?
 interface Invoice {
   id: string; number: string; customer_id: string; customer?: Customer
   date: string; due_date: string; status: string
-  subtotal: number; vat_rate: number; vat_amount: number; total: number; vat_inclusive?: boolean
+  subtotal: number; vat_rate: number; vat_amount: number; total: number; vat_inclusive?: boolean; discount_value?: number; discount_is_pct?: boolean; discount_after_vat?: boolean; discount_amount?: number
   paid_amount: number; balance_due: number; note?: string; gl_posted: boolean
   book_id?: string | null; book?: { code: string; name: string } | null
   items: InvoiceItem[]
@@ -64,6 +65,9 @@ const invoiceSchema = z.object({
   date:        z.string().min(1),
   due_date:    z.string().optional(),
   vat_mode:    z.enum(['exclusive', 'inclusive']),
+  discount_value: z.number().min(0).catch(0),   // ส่วนลดท้ายบิล
+  discount_type:  z.enum(['amount', 'pct']),
+  discount_timing: z.enum(['before', 'after']),   // ส่วนลดก่อน / หลัง VAT
   note:      z.string().optional(),
   book_id:     z.string().optional(),
   items:       z.array(itemSchema).min(1, 'ต้องมีอย่างน้อย 1 รายการ'),
@@ -117,9 +121,9 @@ export default function InvoicePage() {
     mutationFn: async ({ d, confirm }: { d: IForm; confirm: boolean }) => {
       // Each line carries its own VAT; the header rate is just the first line's, for display.
       const items = d.items.map(it => ({ ...it, tax_code_id: it.tax_code_id || undefined, product_id: it.product_id || undefined, detail: it.detail || undefined, vat_rate: vatRateOf(vatCodes, it.tax_code_id) }))
-      const { vat_mode, ...rest } = d
+      const { vat_mode, discount_type, discount_timing, ...rest } = d
       const body = { ...rest, due_date: d.due_date || undefined, book_id: d.book_id || undefined, items,
-                     vat_rate: items[0]?.vat_rate ?? 0, vat_inclusive: vat_mode === 'inclusive' }
+                     vat_rate: items[0]?.vat_rate ?? 0, vat_inclusive: vat_mode === 'inclusive', discount_is_pct: discount_type === 'pct', discount_after_vat: discount_timing === 'after', discount_value: d.discount_value || 0 }
       const { data: saved } = openInv ? await api.put(`/api/v1/ar/invoices/${openInv.id}`, body) : await api.post('/api/v1/ar/invoices', body)
       if (!confirm) return { inv: saved as Invoice, error: null }
       try { return { inv: (await api.post(`/api/v1/ar/invoices/${saved.id}/post-gl`)).data as Invoice, error: null } }
@@ -143,9 +147,9 @@ export default function InvoicePage() {
   })
 
   const newLine = () => ({ description:'', quantity:1, unit:'', unit_price:0, discount_pct:0, tax_code_id: defaultVatCodeId(vatCodes), product_id: '', detail: '' })
-  const blankForm = (): IForm => ({ customer_id: '', date: localToday(), due_date: '', vat_mode: 'exclusive', note: '', book_id: '', items: [newLine()] })
+  const blankForm = (): IForm => ({ customer_id: '', date: localToday(), due_date: '', vat_mode: 'exclusive', discount_value: 0, discount_type: 'amount', discount_timing: 'before', note: '', book_id: '', items: [newLine()] })
   const invForm = (inv: Invoice): IForm => ({
-    customer_id: inv.customer_id, date: inv.date, due_date: inv.due_date, vat_mode: inv.vat_inclusive ? 'inclusive' : 'exclusive',
+    customer_id: inv.customer_id, date: inv.date, due_date: inv.due_date, vat_mode: inv.vat_inclusive ? 'inclusive' : 'exclusive', discount_value: Number(inv.discount_value ?? 0), discount_type: inv.discount_is_pct ? 'pct' : 'amount', discount_timing: inv.discount_after_vat ? 'after' : 'before',
     note: inv.note ?? '', book_id: inv.book_id ?? '',
     items: inv.items.map(it => ({ description: it.description, quantity: Number(it.quantity), unit: it.unit ?? '',
                                   unit_price: Number(it.unit_price), discount_pct: Number(it.discount_pct),
@@ -186,8 +190,9 @@ export default function InvoicePage() {
     setInv(`items.${i}.unit_price`, productPrice(p, 'sales'))
   }
   const lineAmount = (it: Partial<IForm['items'][number]>) => (Number(it.quantity)||0) * (Number(it.unit_price)||0) * (1 - (Number(it.discount_pct)||0)/100)
-  const { subtotal, vat: vatAmt, total } = documentTotals(vatCodes,
-    watchItems.map(it => ({ amount: lineAmount(it), codeId: it.tax_code_id })), watchInv('vat_mode'))
+  const { base: discountBase, discount: discountAmt, subtotal, vat: vatAmt, total } = documentTotals(vatCodes,
+    watchItems.map(it => ({ amount: lineAmount(it), codeId: it.tax_code_id })), watchInv('vat_mode'),
+    Number(watchInv('discount_value')), watchInv('discount_type'), watchInv('discount_timing'))
 
   const { register: regPay, handleSubmit: subPay, reset: resetPay } = useForm<PForm>({
     defaultValues: { date: new Date().toISOString().split('T')[0], method: 'bank_transfer' },
@@ -410,15 +415,19 @@ export default function InvoicePage() {
               {/* Totals */}
               <div style={{ display:'flex', justifyContent:'flex-end' }}>
                 <div style={{ background:'var(--color-bg-inset)', border:'1px solid var(--color-border)', borderRadius:10, padding:'14px 20px', minWidth:240 }}>
-                  {[
-                    ['ยอดก่อน VAT', `฿${subtotal.toLocaleString('th-TH',{minimumFractionDigits:2})}`, 'var(--color-text)'],
-                    ['ภาษีมูลค่าเพิ่ม (VAT)', `฿${vatAmt.toLocaleString('th-TH',{minimumFractionDigits:2})}`, '#F5A623'],
-                  ].map(([l,v,c])=>(
-                    <div key={l as string} style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:12 }}>
-                      <span style={{ color:'var(--color-text-tertiary)' }}>{l}</span>
-                      <span style={{ color:c as string }}>{v}</span>
-                    </div>
-                  ))}
+                  <BillDiscountRow valueField={regInv('discount_value', { valueAsNumber: true })} typeField={regInv('discount_type')}
+                    timingField={regInv('discount_timing')} afterVat={watchInv('discount_timing') === 'after'}
+                    base={discountBase} discount={discountAmt} readOnly={readOnly} hasDiscount={discountAmt > 0} inputStyle={inp}>
+                    {[
+                      ['ยอดก่อน VAT', `฿${subtotal.toLocaleString('th-TH',{minimumFractionDigits:2})}`, 'var(--color-text)'],
+                      ['ภาษีมูลค่าเพิ่ม (VAT)', `฿${vatAmt.toLocaleString('th-TH',{minimumFractionDigits:2})}`, '#F5A623'],
+                    ].map(([l,v,c])=>(
+                      <div key={l as string} style={{ display:'flex', justifyContent:'space-between', padding:'4px 0', fontSize:12 }}>
+                        <span style={{ color:'var(--color-text-tertiary)' }}>{l}</span>
+                        <span style={{ color:c as string }}>{v}</span>
+                      </div>
+                    ))}
+                  </BillDiscountRow>
                   <div style={{ display:'flex', justifyContent:'space-between', padding:'8px 0 0', borderTop:'1px solid var(--color-border-strong)', marginTop:4 }}>
                     <span style={{ fontSize:13, fontWeight:700 }}>ยอดรวมทั้งสิ้น</span>
                     <span style={{ fontSize:16, fontWeight:800, color:'#F2714E' }}>฿{total.toLocaleString('th-TH',{minimumFractionDigits:2})}</span>

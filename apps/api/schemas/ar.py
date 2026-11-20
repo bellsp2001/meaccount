@@ -100,6 +100,9 @@ class InvoiceCreate(BaseModel):
     due_date:    Optional[date] = None    # auto-calc from credit_days if None
     vat_rate:    Decimal = Decimal("7")
     vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
+    discount_value:  Decimal = Decimal("0")   # ส่วนลดท้ายบิล: baht, or % when discount_is_pct
+    discount_is_pct: bool = False
+    discount_after_vat: bool = False   # True = the discount comes off the total after VAT
     note:        Optional[str] = None
     book_id:     Optional[UUID] = None    # สมุดบันทึก (income side)
     items:       List[InvoiceItemCreate]
@@ -123,6 +126,10 @@ class InvoiceResponse(BaseModel):
     subtotal:    Decimal
     vat_rate:    Decimal
     vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
+    discount_value:  Decimal = Decimal("0")   # ส่วนลดท้ายบิล: baht, or % when discount_is_pct
+    discount_is_pct: bool = False
+    discount_after_vat: bool = False   # True = the discount comes off the total after VAT
+    discount_amount: Decimal = Decimal("0")   # the bill discount in baht
     vat_amount:  Decimal
     total:       Decimal
     paid_amount: Decimal

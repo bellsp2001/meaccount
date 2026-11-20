@@ -149,6 +149,63 @@ def test_line_product_and_detail_carry_through(client, h, db, codes, customer):
     assert (inv["items"][0]["product_id"], inv["items"][0]["detail"]) == (str(p.id), "80 แกรม 500 แผ่น")
 
 
+def test_bill_discount_comes_off_before_vat(client, h, codes, customer):
+    # 1,000 at 7% + 500 at 0% with a 150 discount: shared 100 / 50, VAT 7% of 900 = 63.
+    inv = client.post("/api/v1/ar/invoices", headers=h, json={
+        "customer_id": customer["id"], "date": "2025-03-01", "discount_value": 150,
+        "items": [_line("บริการ", 1000, codes["VAT7"]), _line("ยกเว้น", 500, codes["VAT0"])]}).json()
+    assert Decimal(inv["discount_amount"]) == Decimal("150.00")
+    assert Decimal(inv["subtotal"]) == Decimal("1350.00") and Decimal(inv["vat_amount"]) == Decimal("63.00")
+    assert Decimal(inv["total"]) == Decimal("1413.00") and Decimal(inv["balance_due"]) == Decimal("1413.00")
+
+
+def test_bill_discount_percent_inclusive_and_conversion(client, h, codes, customer):
+    qt = client.post("/api/v1/ar/sales-documents", headers=h, json={
+        "doc_type": "quotation", "customer_id": customer["id"], "date": "2025-03-01",
+        "vat_inclusive": True, "discount_value": 10, "discount_is_pct": True,
+        "items": [_line("บริการ", 1070, codes["VAT7"])]}).json()
+    assert Decimal(qt["discount_amount"]) == Decimal("107.00")
+    assert Decimal(qt["total"]) == Decimal("963.00") and Decimal(qt["vat_amount"]) == Decimal("63.00")
+    so = client.post(f"/api/v1/ar/sales-documents/{qt['id']}/convert", headers=h).json()
+    inv_ref = client.post(f"/api/v1/ar/sales-documents/{so['target_id']}/convert", headers=h).json()
+    inv = client.get(f"/api/v1/ar/invoices/{inv_ref['target_id']}", headers=h).json()
+    assert inv["discount_is_pct"] is True and Decimal(inv["total"]) == Decimal("963.00")
+
+
+def test_bill_discount_is_validated(client, h, codes, customer):
+    base = {"customer_id": customer["id"], "date": "2025-03-01", "items": [_line("บริการ", 100, codes["VAT7"])]}
+    assert client.post("/api/v1/ar/invoices", headers=h, json={**base, "discount_value": -1}).status_code == 400
+    assert client.post("/api/v1/ar/invoices", headers=h, json={**base, "discount_value": 101, "discount_is_pct": True}).status_code == 400
+    capped = client.post("/api/v1/ar/invoices", headers=h, json={**base, "discount_value": 500}).json()
+    assert Decimal(capped["discount_amount"]) == Decimal("100.00") and Decimal(capped["total"]) == Decimal("0.00")
+
+
+def test_bill_discount_after_vat_comes_off_the_total(client, h, codes, customer):
+    # 1,000 at 7% → VAT 70 on the full lines; 10% of 1,070 = 107 off the total → 963.
+    qt = client.post("/api/v1/ar/sales-documents", headers=h, json={
+        "doc_type": "quotation", "customer_id": customer["id"], "date": "2025-03-01",
+        "discount_value": 10, "discount_is_pct": True, "discount_after_vat": True,
+        "items": [_line("บริการ", 1000, codes["VAT7"])]}).json()
+    assert qt["discount_after_vat"] is True
+    assert Decimal(qt["subtotal"]) == Decimal("1000.00") and Decimal(qt["vat_amount"]) == Decimal("70.00")
+    assert Decimal(qt["discount_amount"]) == Decimal("107.00") and Decimal(qt["total"]) == Decimal("963.00")
+    so = client.post(f"/api/v1/ar/sales-documents/{qt['id']}/convert", headers=h).json()
+    inv_ref = client.post(f"/api/v1/ar/sales-documents/{so['target_id']}/convert", headers=h).json()
+    inv = client.get(f"/api/v1/ar/invoices/{inv_ref['target_id']}", headers=h).json()
+    assert inv["discount_after_vat"] is True and Decimal(inv["vat_amount"]) == Decimal("70.00")
+    assert Decimal(inv["total"]) == Decimal("963.00") and Decimal(inv["balance_due"]) == Decimal("963.00")
+
+
+def test_bill_discount_after_vat_inclusive_and_cap(client, h, codes, supplier):
+    base = {"supplier_id": supplier["id"], "date": "2025-03-01", "description": "วัสดุ", "discount_after_vat": True,
+            "vat_inclusive": True, "items": [_line("วัสดุ", 1070, codes["VAT7"])]}
+    bill = client.post("/api/v1/ap/bills", headers=h, json={**base, "discount_value": 70}).json()
+    assert Decimal(bill["subtotal"]) == Decimal("1000.00") and Decimal(bill["vat_amount"]) == Decimal("70.00")
+    assert Decimal(bill["total"]) == Decimal("1000.00") and Decimal(bill["net_payable"]) == Decimal("1000.00")
+    capped = client.post("/api/v1/ap/bills", headers=h, json={**base, "discount_value": 5000}).json()
+    assert Decimal(capped["discount_amount"]) == Decimal("1070.00") and Decimal(capped["total"]) == Decimal("0.00")
+
+
 def test_bill_and_purchase_order_per_line(client, h, codes, supplier):
     po = client.post("/api/v1/ap/purchase-documents", headers=h, json={
         "doc_type": "purchase_order", "supplier_id": supplier["id"], "date": "2025-03-01", "vat_rate": 7,

@@ -18,7 +18,7 @@ from models.ar import Customer, Invoice, InvoiceStatus, Payment
 from models.accounting import Account, BookSide, Journal, JournalEntry, JournalStatus, JournalType, NormalBalance
 from services.accounting import next_journal_number
 from services.document_books import resolve_book, require_book
-from services.vat import document_totals
+from services.vat import totals_fields, pricing_of, after_vat_discount
 from services.ar import _find_account, create_invoice
 from services.ap import _create_posted_journal
 from schemas.sales import SalesDocCreate, SalesItemCreate
@@ -46,9 +46,10 @@ def next_doc_number(db: Session, doc_type: SalesDocType, d: date) -> str:
 
 
 # ── Create / read ──────────────────────────────────────────────
-def _calc_totals(db: Session, items: List[SalesItemCreate], vat_rate: Decimal, inclusive: bool = False):
-    """(subtotal, VAT, total, document rate) — VAT is worked out per line (services.vat)."""
-    return document_totals(db, items, vat_rate, inclusive)
+def _calc_totals(db: Session, items: List[SalesItemCreate], vat_rate: Decimal, pricing) -> dict:
+    """The document's total columns — VAT per line, VAT mode and bill discount (services.vat).
+    `pricing` is the payload or document whose vat_inclusive / discount settings apply."""
+    return totals_fields(db, items, vat_rate, **pricing_of(pricing))
 
 
 def _item_fields(it) -> dict:
@@ -65,12 +66,11 @@ def create_sales_document(db: Session, payload: SalesDocCreate, user_id: Optiona
     if is_note:
         _issued_invoice_for(db, payload.invoice_id, payload.customer_id)
 
-    subtotal, vat_amount, total, vat_rate = _calc_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
     doc = SalesDocument(
         number=next_doc_number(db, payload.doc_type, payload.date),
         doc_type=payload.doc_type, customer_id=payload.customer_id,
-        date=payload.date, valid_until=payload.valid_until, vat_inclusive=payload.vat_inclusive,
-        vat_rate=vat_rate, subtotal=subtotal, vat_amount=vat_amount, total=total,
+        date=payload.date, valid_until=payload.valid_until,
+        **_calc_totals(db, payload.items, payload.vat_rate, payload),
         deposit_amount=payload.deposit_amount if payload.doc_type == SalesDocType.DEPOSIT else Decimal("0"),
         note=payload.note, created_by=user_id,
         invoice_id=payload.invoice_id if is_note else None,
@@ -101,8 +101,8 @@ def update_sales_document(db: Session, doc_id: UUID, payload: SalesDocCreate) ->
     if is_note:
         _issued_invoice_for(db, payload.invoice_id, payload.customer_id)
 
-    doc.subtotal, doc.vat_amount, doc.total, doc.vat_rate = _calc_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
-    doc.vat_inclusive = payload.vat_inclusive
+    for k, v in _calc_totals(db, payload.items, payload.vat_rate, payload).items():
+        setattr(doc, k, v)
     doc.customer_id, doc.date, doc.valid_until = payload.customer_id, payload.date, payload.valid_until
     doc.note = payload.note
     doc.book_id = resolve_book(db, payload.book_id, BookSide.INCOME) and payload.book_id
@@ -167,12 +167,11 @@ def convert_document(db: Session, doc_id: UUID, user_id: Optional[UUID] = None):
     ) for it in doc.items]
 
     if doc.doc_type == SalesDocType.QUOTATION:
-        subtotal, vat_amount, total, vat_rate = _calc_totals(db, items, doc.vat_rate, doc.vat_inclusive)
         so = SalesDocument(
             number=next_doc_number(db, SalesDocType.SALES_ORDER, date.today()),
             doc_type=SalesDocType.SALES_ORDER, customer_id=doc.customer_id,
-            date=date.today(), valid_until=doc.valid_until, vat_rate=vat_rate, vat_inclusive=doc.vat_inclusive,
-            subtotal=subtotal, vat_amount=vat_amount, total=total,
+            date=date.today(), valid_until=doc.valid_until,
+            **_calc_totals(db, items, doc.vat_rate, doc),
             note=doc.note, created_by=user_id, source_doc_id=doc.id,
         )
         db.add(so); db.flush()
@@ -186,7 +185,9 @@ def convert_document(db: Session, doc_id: UUID, user_id: Optional[UUID] = None):
 
     # SALES_ORDER → Invoice
     inv = create_invoice(db, InvoiceCreate(
-        customer_id=doc.customer_id, date=date.today(), vat_rate=doc.vat_rate, vat_inclusive=doc.vat_inclusive, note=doc.note,
+        customer_id=doc.customer_id, date=date.today(), vat_rate=doc.vat_rate, vat_inclusive=doc.vat_inclusive,
+        discount_value=doc.discount_value, discount_is_pct=doc.discount_is_pct,
+        discount_after_vat=doc.discount_after_vat, note=doc.note,
         items=[InvoiceItemCreate(
             description=it.description, quantity=it.quantity, unit=it.unit,
             unit_price=it.unit_price, discount_pct=it.discount_pct, sequence=it.sequence,
@@ -292,6 +293,8 @@ def post_note_to_gl(db: Session, doc_id: UUID, user_id: Optional[UUID] = None) -
     ]
     if vat_acc and doc.vat_amount > 0:
         lines.append((vat_acc, -doc.vat_amount, f"VAT ขาย {label} {doc.number}"))
+    if after_vat_discount(doc):
+        lines.append((rev_acc, after_vat_discount(doc), f"ส่วนลดท้ายบิลหลัง VAT {label} {doc.number}"))
     # A debit note keeps the invoice's signs (AR debit); a credit note flips every line.
     sign = -1 if is_credit else 1
     entries = []

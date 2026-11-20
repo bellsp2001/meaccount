@@ -43,9 +43,33 @@ export function sumLineVat(codes: VatCode[], lines: { amount: number; codeId?: s
 /** How line prices are entered: VAT on top (แยก VAT) or already in the price (รวม VAT). */
 export type VatMode = 'exclusive' | 'inclusive'
 
-/** (amount before VAT, VAT, total) of a document's lines in the given mode — the API works it the same way. */
-export function documentTotals(codes: VatCode[], lines: { amount: number; codeId?: string | null }[], mode: VatMode) {
+/** How the bill discount (ส่วนลดท้ายบิล) is entered: baht or % of the lines. */
+export type DiscountType = 'amount' | 'pct'
+
+/** When the bill discount applies: off the lines before VAT, or off the total after VAT. */
+export type DiscountTiming = 'before' | 'after'
+
+/** A document's totals in the given VAT mode, after a bill discount — the API works it the same way.
+ *  Before VAT: the discount comes off the lines, shared across them pro rata.
+ *  After VAT: VAT is on the full lines and the discount (a % of the total with VAT) comes off the total.
+ *  `base` is what the discount comes off (รวมเป็นเงิน). */
+export function documentTotals(codes: VatCode[], lines: { amount: number; codeId?: string | null }[], mode: VatMode,
+                               discountValue = 0, discountType: DiscountType = 'amount', timing: DiscountTiming = 'before') {
   const sum = lines.reduce((s, l) => s + l.amount, 0)
-  const vat = sumLineVat(codes, lines, mode === 'inclusive')
-  return mode === 'inclusive' ? { subtotal: sum - vat, vat, total: sum } : { subtotal: sum, vat, total: sum + vat }
+  const value = Number.isFinite(discountValue) ? Math.max(discountValue, 0) : 0
+  const discountOf = (base: number) =>
+    Math.min(Math.round((discountType === 'pct' ? base * Math.min(value, 100) / 100 : value) * 100) / 100, base)
+  if (timing === 'after') {
+    const vat = sumLineVat(codes, lines, mode === 'inclusive')
+    const [subtotal, gross] = mode === 'inclusive' ? [sum - vat, sum] : [sum, sum + vat]
+    const discount = discountOf(gross)
+    return { lines: sum, base: gross, discount, subtotal, vat, total: gross - discount }
+  }
+  const discount = discountOf(sum)
+  const factor = sum ? (sum - discount) / sum : 0
+  const vat = sumLineVat(codes, lines.map(l => ({ ...l, amount: l.amount * factor })), mode === 'inclusive')
+  const net = sum - discount
+  return mode === 'inclusive'
+    ? { lines: sum, base: sum, discount, subtotal: net - vat, vat, total: net }
+    : { lines: sum, base: sum, discount, subtotal: net, vat, total: net + vat }
 }

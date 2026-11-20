@@ -21,6 +21,7 @@ from models.accounting import BookSide
 from services.ap import _find_acc, _create_posted_journal, bill_posting_accounts, create_bill
 from services.document_books import resolve_book, require_book
 from services.sales import _calc_totals, _item_fields
+from services.vat import after_vat_discount
 from schemas.purchase import PurchaseDocCreate
 from schemas.sales import SalesItemCreate
 from schemas.ap import BillCreate, BillItemCreate
@@ -62,12 +63,11 @@ def create_purchase_document(db: Session, payload: PurchaseDocCreate, user_id: O
     if is_note:
         _posted_bill_for(db, payload.bill_id, payload.supplier_id)
 
-    subtotal, vat_amount, total, vat_rate = _calc_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
     doc = PurchaseDocument(
         number=next_doc_number(db, payload.doc_type, payload.date),
         doc_type=payload.doc_type, supplier_id=payload.supplier_id,
-        date=payload.date, valid_until=payload.valid_until, vat_inclusive=payload.vat_inclusive,
-        vat_rate=vat_rate, subtotal=subtotal, vat_amount=vat_amount, total=total,
+        date=payload.date, valid_until=payload.valid_until,
+        **_calc_totals(db, payload.items, payload.vat_rate, payload),
         deposit_amount=payload.deposit_amount if payload.doc_type == PurchaseDocType.DEPOSIT else Decimal("0"),
         ref_number=payload.ref_number, note=payload.note, created_by=user_id,
         bill_id=payload.bill_id if is_note else None,
@@ -97,8 +97,8 @@ def update_purchase_document(db: Session, doc_id: UUID, payload: PurchaseDocCrea
     if is_note:
         _posted_bill_for(db, payload.bill_id, payload.supplier_id)
 
-    doc.subtotal, doc.vat_amount, doc.total, doc.vat_rate = _calc_totals(db, payload.items, payload.vat_rate, payload.vat_inclusive)
-    doc.vat_inclusive = payload.vat_inclusive
+    for k, v in _calc_totals(db, payload.items, payload.vat_rate, payload).items():
+        setattr(doc, k, v)
     doc.supplier_id, doc.date, doc.valid_until = payload.supplier_id, payload.date, payload.valid_until
     doc.ref_number, doc.note = payload.ref_number, payload.note
     doc.book_id = resolve_book(db, payload.book_id, BookSide.EXPENSE) and payload.book_id
@@ -161,12 +161,11 @@ def convert_document(db: Session, doc_id: UUID, user_id: Optional[UUID] = None):
     ) for it in doc.items]
 
     if doc.doc_type == PurchaseDocType.RFQ:
-        subtotal, vat_amount, total, vat_rate = _calc_totals(db, items, doc.vat_rate, doc.vat_inclusive)
         po = PurchaseDocument(
             number=next_doc_number(db, PurchaseDocType.PURCHASE_ORDER, date.today()),
             doc_type=PurchaseDocType.PURCHASE_ORDER, supplier_id=doc.supplier_id,
-            date=date.today(), valid_until=doc.valid_until, vat_rate=vat_rate, vat_inclusive=doc.vat_inclusive,
-            subtotal=subtotal, vat_amount=vat_amount, total=total,
+            date=date.today(), valid_until=doc.valid_until,
+            **_calc_totals(db, items, doc.vat_rate, doc),
             note=doc.note, created_by=user_id, source_doc_id=doc.id,
         )
         db.add(po); db.flush()
@@ -180,6 +179,8 @@ def convert_document(db: Session, doc_id: UUID, user_id: Optional[UUID] = None):
     # PURCHASE_ORDER → Bill. Bill lines carry no discount, so the discount goes into the unit price.
     bill = create_bill(db, BillCreate(
         supplier_id=doc.supplier_id, date=date.today(), vat_rate=doc.vat_rate, vat_inclusive=doc.vat_inclusive,
+        discount_value=doc.discount_value, discount_is_pct=doc.discount_is_pct,
+        discount_after_vat=doc.discount_after_vat,
         description=f"ตามใบสั่งซื้อ {doc.number}", ref_number=doc.ref_number, note=doc.note,
         items=[BillItemCreate(
             description=it.description, quantity=it.quantity, unit=it.unit, sequence=it.sequence,
@@ -266,6 +267,8 @@ def post_note_to_gl(db: Session, doc_id: UUID, user_id: Optional[UUID] = None) -
     lines = [(exp_acc, doc.subtotal, f"ค่าใช้จ่าย {label} {doc.number}")]
     if vat_acc and doc.vat_amount > 0:
         lines.append((vat_acc, doc.vat_amount, f"VAT ซื้อ {label} {doc.number}"))
+    if after_vat_discount(doc):
+        lines.append((exp_acc, -after_vat_discount(doc), f"ส่วนลดท้ายบิลหลัง VAT {label} {doc.number}"))
     lines.append((ap_acc, -doc.total, f"{label} {doc.number} อ้างอิง {bill.number}"))
     sign = -1 if is_credit else 1
     entries = []

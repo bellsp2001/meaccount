@@ -54,6 +54,9 @@ class SalesDocCreate(BaseModel):
     valid_until:    Optional[date] = None
     vat_rate:       Decimal = Decimal("7")
     vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
+    discount_value:  Decimal = Decimal("0")   # ส่วนลดท้ายบิล: baht, or % when discount_is_pct
+    discount_is_pct: bool = False
+    discount_after_vat: bool = False   # True = the discount comes off the total after VAT
     deposit_amount: Decimal = Decimal("0")
     note:           Optional[str] = None
     invoice_id:     Optional[UUID] = None   # credit/debit notes: the invoice being adjusted
@@ -88,6 +91,10 @@ class SalesDocResponse(BaseModel):
     subtotal:       Decimal
     vat_rate:       Decimal
     vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
+    discount_value:  Decimal = Decimal("0")   # ส่วนลดท้ายบิล: baht, or % when discount_is_pct
+    discount_is_pct: bool = False
+    discount_after_vat: bool = False   # True = the discount comes off the total after VAT
+    discount_amount: Decimal = Decimal("0")   # the bill discount in baht
     vat_amount:     Decimal
     total:          Decimal
     deposit_amount: Decimal
