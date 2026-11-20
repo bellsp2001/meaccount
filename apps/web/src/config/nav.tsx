@@ -51,7 +51,6 @@ export const NAV: NavItem[] = [
       { to: '/gl/tax-types', label: 'ประเภทภาษี' },
     ],
   },
-  { to: '/pos', icon: 'pos', label: 'POS หน้าร้าน', roles: ['admin','cashier','accountant'], badge: 'New' },
   {
     to: '/inventory', icon: 'inventory', label: 'สินค้าคงคลัง', roles: ['admin','inventory','accountant'],
     children: [
@@ -83,21 +82,6 @@ export const NAV: NavItem[] = [
       { to: '/reports/ar-aging',      label: 'อายุลูกหนี้',          roles: ['admin','accountant'] },
       { to: '/reports/expenses',      label: 'รายงานค่าใช้จ่าย',    section: 'รายงานรายจ่าย/ค่าใช้จ่าย', roles: ['admin','accountant'] },
       { to: '/reports/ap-aging',      label: 'อายุเจ้าหนี้',         roles: ['admin','accountant'] },
-    ],
-  },
-  { to: '/ai-chat',   icon: 'ai', label: 'AI Assistant', roles: ['admin','accountant','manager'], badge: 'Beta' },
-  {
-    to: '/audit', icon: 'audit', label: 'AI Audit', roles: ['admin','manager','auditor'],
-    children: [
-      { to: '/audit', label: 'AI Audit' },
-      { to: '/fraud', label: 'Fraud Detection' },
-    ],
-  },
-  {
-    to: '/documents', icon: 'documents', label: 'Document AI', roles: ['admin','accountant','cashier'],
-    children: [
-      { to: '/documents',       label: 'Document Center' },
-      { to: '/documents/match', label: '3-Way Match' },
     ],
   },
   {

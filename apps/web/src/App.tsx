@@ -5,7 +5,6 @@ import { Spinner } from '@/components/ui/Spinner'
 import { AppLayout } from '@/components/layout/AppLayout'
 import LoginPage from '@/pages/auth/LoginPage'
 import DashboardPage from '@/pages/dashboard/DashboardPage'
-import AIChatPage from '@/pages/dashboard/AIChatPage'
 import UsersPage from '@/pages/users/UsersPage'
 import ChartOfAccountsPage from '@/pages/gl/ChartOfAccountsPage'
 import JournalPage from '@/pages/gl/JournalPage'
@@ -30,10 +29,8 @@ import PayrollRunPage from '@/pages/payroll/PayrollRunPage'
 import VATReturnPage from '@/pages/tax/VATReturnPage'
 import WHTCertificatesPage from '@/pages/tax/WHTCertificatesPage'
 import FinancialStatementsPage from '@/pages/reports/FinancialStatementsPage'
-import AuditDashboardPage from '@/pages/audit/AuditDashboardPage'
 import CompaniesPage from '@/pages/company/CompaniesPage'
 import ConsolidatedPage from '@/pages/company/ConsolidatedPage'
-import POSTerminalPage from '@/pages/pos/POSTerminalPage'
 import MyLeavePage from '@/pages/leave/MyLeavePage'
 import LeaveApprovalsPage from '@/pages/leave/LeaveApprovalsPage'
 import TeamCalendarPage from '@/pages/leave/TeamCalendarPage'
@@ -41,10 +38,7 @@ import DocTemplateEditorPage from '@/pages/doctemplate/DocTemplateEditorPage'
 import ReportBuilderPage from '@/pages/reports/ReportBuilderPage'
 import NLReportPage from '@/pages/reports/NLReportPage'
 import AgingReportPage from '@/pages/ar/AgingReportPage'
-import RiskDashboardPage from '@/pages/fraud/RiskDashboardPage'
 import PredictiveAnalyticsPage from '@/pages/analytics/PredictiveAnalyticsPage'
-import DocumentCenterPage from '@/pages/documents/DocumentCenterPage'
-import ThreeWayMatchPage from '@/pages/documents/ThreeWayMatchPage'
 import APIKeysPage from '@/pages/developer/APIKeysPage'
 import IntegrationsPage from '@/pages/developer/IntegrationsPage'
 import PromptProfilesPage from '@/pages/ai-ops/PromptProfilesPage'
@@ -94,7 +88,6 @@ export default function App() {
         <Route path="/login" element={<LoginPage />} />
         <Route element={<AuthGuard><AppLayout /></AuthGuard>}>
           <Route path="/dashboard"        element={<DashboardPage />} />
-          <Route path="/ai-chat"          element={<AIChatPage />} />
           <Route path="/users"            element={<RoleGuard roles={['admin']}><UsersPage /></RoleGuard>} />
           {/* GL */}
           <Route path="/gl"               element={<RoleGuard roles={ACC}><ChartOfAccountsPage /></RoleGuard>} />
@@ -137,8 +130,6 @@ export default function App() {
           <Route path="/tax"      element={<RoleGuard roles={ACC}><VATReturnPage /></RoleGuard>} />
           <Route path="/tax/wht"  element={<RoleGuard roles={ACC}><WHTCertificatesPage /></RoleGuard>} />
           <Route path="/reports"  element={<RoleGuard roles={['admin','accountant','manager','auditor']}><FinancialStatementsPage /></RoleGuard>} />
-          <Route path="/audit"    element={<RoleGuard roles={['admin','manager','auditor']}><AuditDashboardPage /></RoleGuard>} />
-          <Route path="/fraud"    element={<RoleGuard roles={['admin','manager','auditor']}><RiskDashboardPage /></RoleGuard>} />
           <Route path="/analytics" element={<RoleGuard roles={['admin','accountant','manager']}><PredictiveAnalyticsPage /></RoleGuard>} />
           {/* Reports — sales/expense reports live under /reports; the old AR paths redirect */}
           <Route path="/reports/trial-balance" element={<RoleGuard roles={REPORT_ROLES}><TrialBalancePage /></RoleGuard>} />
@@ -149,8 +140,6 @@ export default function App() {
           <Route path="/reports/ap-aging"      element={<RoleGuard roles={AR_ROLES}><AgingReportPage key="ap" side="payable" /></RoleGuard>} />
           <Route path="/ar/reports" element={<Navigate to="/reports/sales" replace />} />
           <Route path="/ar/aging"   element={<Navigate to="/reports/ar-aging" replace />} />
-          <Route path="/documents"       element={<RoleGuard roles={AR_ROLES}><DocumentCenterPage /></RoleGuard>} />
-          <Route path="/documents/match" element={<RoleGuard roles={AR_ROLES}><ThreeWayMatchPage /></RoleGuard>} />
           <Route path="/developer/keys"         element={<RoleGuard roles={['admin']}><APIKeysPage /></RoleGuard>} />
           <Route path="/developer/integrations" element={<RoleGuard roles={ACC}><IntegrationsPage /></RoleGuard>} />
           <Route path="/ai-ops/profiles"   element={<RoleGuard roles={['admin']}><PromptProfilesPage /></RoleGuard>} />
@@ -160,7 +149,6 @@ export default function App() {
           <Route path="/ops/readiness"       element={<RoleGuard roles={['admin']}><GoLiveReadinessPage /></RoleGuard>} />
           <Route path="/companies"             element={<RoleGuard roles={['admin']}><CompaniesPage /></RoleGuard>} />
           <Route path="/companies/consolidated" element={<RoleGuard roles={ACC}><ConsolidatedPage /></RoleGuard>} />
-          <Route path="/pos" element={<RoleGuard roles={['admin','cashier','accountant']}><POSTerminalPage /></RoleGuard>} />
           <Route path="/leave/my"         element={<MyLeavePage />} />
           <Route path="/leave/approvals" element={<RoleGuard roles={['admin','manager']}><LeaveApprovalsPage /></RoleGuard>} />
           <Route path="/leave/calendar"  element={<TeamCalendarPage />} />
