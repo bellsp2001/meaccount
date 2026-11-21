@@ -85,13 +85,6 @@ export const NAV: NavItem[] = [
     ],
   },
   {
-    to: '/companies', icon: 'building', label: 'บริษัทในเครือ', roles: ['admin','accountant'], badge: 'New',
-    children: [
-      { to: '/companies',             label: 'บริษัททั้งหมด' },
-      { to: '/companies/consolidated', label: 'งบการเงินรวม' },
-    ],
-  },
-  {
     // Platform/admin tools grouped under one entry; each page keeps its own role from App.tsx.
     to: '/developer/integrations', icon: 'settings', label: 'ตั้งค่าระบบ', roles: ['admin','accountant'],
     children: [
@@ -106,6 +99,16 @@ export const NAV: NavItem[] = [
   },
   { to: '/users',     icon: 'users', label: 'จัดการผู้ใช้', roles: ['admin'] },
 ]
+
+/** บริษัทในเครือ — opened from the company/branch switcher in the top bar, not the side menu.
+ *  Each link keeps its page's role from App.tsx. */
+export const COMPANY_NAV: NavItem = {
+  to: '/companies', icon: 'building', label: 'บริษัทในเครือ', roles: ['admin','accountant'],
+  children: [
+    { to: '/companies',              label: 'จัดการบริษัท/สาขา', roles: ['admin'] },
+    { to: '/companies/consolidated', label: 'งบการเงินรวม' },
+  ],
+}
 
 // iOS home-screen palette — a stable hue per app so the dock reads like a
 // colourful, frosted app grid.
