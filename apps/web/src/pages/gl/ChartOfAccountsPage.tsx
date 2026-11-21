@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 // ── Types ──────────────────────────────────────────────────────
 type AccountType = 'asset' | 'liability' | 'equity' | 'income' | 'expense'
@@ -158,8 +160,6 @@ export default function ChartOfAccountsPage() {
     return { type: t, count }
   })
 
-  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -236,8 +236,9 @@ export default function ChartOfAccountsPage() {
 
       {/* CREATE MODAL */}
       {showCreate && (
-        <div style={overlay} onClick={() => setShowCreate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowCreate(false)} label="กลับไปที่ผังบัญชี" />
+          <div className="doc-panel-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>เพิ่มบัญชีใหม่</h3>
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
@@ -262,7 +263,7 @@ export default function ChartOfAccountsPage() {
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div>
                   <label style={lbl}>ประเภทบัญชี</label>
-                  <select {...register('account_type')} style={{ ...inp, cursor: 'pointer' }}
+                  <SearchSelect {...register('account_type')} style={{ ...inp, cursor: 'pointer' }}
                     onChange={e => {
                       const t = e.target.value as AccountType
                       setValue('account_type', t)
@@ -271,23 +272,23 @@ export default function ChartOfAccountsPage() {
                     {(['asset','liability','equity','income','expense'] as AccountType[]).map(t => (
                       <option key={t} value={t}>{TYPE_META[t].label}</option>
                     ))}
-                  </select>
+                  </SearchSelect>
                 </div>
                 <div>
                   <label style={lbl}>Normal Balance</label>
-                  <select {...register('normal_balance')} style={{ ...inp, cursor: 'pointer' }}>
+                  <SearchSelect {...register('normal_balance')} style={{ ...inp, cursor: 'pointer' }}>
                     <option value="debit">Debit (Dr)</option>
                     <option value="credit">Credit (Cr)</option>
-                  </select>
+                  </SearchSelect>
                 </div>
               </div>
               <div>
                 <label style={lbl}>ระดับบัญชี (1=หมวด, 2=ประเภท, 3=บัญชีย่อย)</label>
-                <select {...register('level', { valueAsNumber: true })} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect {...register('level', { valueAsNumber: true })} style={{ ...inp, cursor: 'pointer' }}>
                   <option value={1}>1 — หมวดใหญ่</option>
                   <option value={2}>2 — ประเภท</option>
                   <option value={3}>3 — บัญชีย่อย</option>
-                </select>
+                </SearchSelect>
               </div>
               <div>
                 <label style={lbl}>หมายเหตุ</label>
@@ -308,8 +309,9 @@ export default function ChartOfAccountsPage() {
 
       {/* EDIT MODAL */}
       {editing && (
-        <div style={overlay} onClick={() => setEditing(null)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setEditing(null)} label="กลับไปที่ผังบัญชี" />
+          <div className="doc-panel-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>แก้ไขบัญชี <span style={{ fontFamily: 'monospace', color: 'var(--color-muted)' }}>{editing.code}</span></h3>
               <button onClick={() => setEditing(null)} aria-label="ปิด" style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>

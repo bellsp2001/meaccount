@@ -3,7 +3,8 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/store/auth'
 import { useCompanyStore, type Company } from '@/store/company'
-import { allowedNav, findActiveNav, navTint, IconTile, NAV } from '@/config/nav'
+import { allowedNav, findActiveNav, navTint, IconTile, NAV, COMPANY_NAV } from '@/config/nav'
+import type { UserRole } from '@/types'
 import { ThemeToggle } from './ThemeToggle'
 
 export function TopBar() {
@@ -11,10 +12,12 @@ export function TopBar() {
   const navigate = useNavigate()
   const { user, logout } = useAuthStore()
   const apps = allowedNav(user?.role)
-  const active = findActiveNav(pathname, apps)
+  // The company pages aren't in the side menu (they open from the company switcher) but still title the bar.
+  const active = findActiveNav(pathname, apps) ?? findActiveNav(pathname, [COMPANY_NAV])
   const title = active?.label ?? 'MeAccount'
   // By route, not identity: allowedNav() returns copies when it filters sub-items by role.
-  const tint = active ? navTint(NAV.findIndex(n => n.to === active.to)) : undefined
+  const navIndex = active ? NAV.findIndex(n => n.to === active.to) : -1
+  const tint = active ? navTint(navIndex >= 0 ? navIndex : NAV.length) : undefined
 
   return (
     <header className="chrome-panel" style={{
@@ -46,7 +49,7 @@ export function TopBar() {
             <span style={{ position: 'absolute', top: 4, right: 6, width: 8, height: 8, borderRadius: '50%', background: '#FF4D6D' }} />
           </button>
           <span className="tb-company" style={{ width: 1, height: 20, background: 'var(--chrome-line)', flexShrink: 0 }} />
-          <CompanyChip />
+          <CompanyChip role={user?.role as UserRole | undefined} />
           <span style={{ width: 1, height: 20, background: 'var(--chrome-line)', flexShrink: 0 }} />
           <UserChip name={user?.full_name} role={user?.role} onLogout={() => { logout(); navigate('/login') }} />
         </div>
@@ -65,8 +68,13 @@ const TB_CSS = `
 @container (max-width: 220px) { .tb-bell { display: none !important; } }
 `
 
-function CompanyChip() {
+function CompanyChip({ role }: { role?: UserRole }) {
+  const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [open, setOpen] = useState(false)
+  // บริษัทในเครือ pages this role may open (each link's own role, else the group's).
+  const links = role && COMPANY_NAV.roles.includes(role)
+    ? COMPANY_NAV.children!.filter(c => !c.roles || c.roles.includes(role)) : []
   const ref = useRef<HTMLDivElement>(null)
   const { currentId, setCurrent } = useCompanyStore()
   const { data: companies = [] } = useQuery<Company[]>({
@@ -107,6 +115,15 @@ function CompanyChip() {
               </button>
             )
           })}
+          {links.length > 0 && <>
+            <div style={{ height: 1, margin: '6px 4px', background: 'var(--chrome-line)' }} />
+            <p style={{ margin: 0, padding: '6px 10px', fontSize: 9, fontWeight: 700, color: 'var(--color-dim)', textTransform: 'uppercase', letterSpacing: '0.12em' }}>{COMPANY_NAV.label}</p>
+            {links.map(l => (
+              <button key={l.to} onClick={() => { navigate(l.to); setOpen(false) }} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '8px 10px', borderRadius: 10, border: 'none', cursor: 'pointer', fontSize: 12, fontWeight: 600, color: 'var(--color-text)', background: pathname === l.to ? 'color-mix(in srgb, var(--color-accent) 14%, transparent)' : 'transparent' }}>
+                {l.label}
+              </button>
+            ))}
+          </>}
         </div>
       )}
     </div>

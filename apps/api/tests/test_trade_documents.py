@@ -10,7 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from core.database import Base, get_db
 from core.security import hash_password
 from models.user import User, UserRole
-from models.accounting import Account, AccountTypeEnum, NormalBalance
+from models.accounting import Account, AccountTypeEnum, NormalBalance, DocumentBook, BookSide, JournalType
 from main import app
 
 engine = create_engine("sqlite:///./test_trade_documents.db", connect_args={"check_same_thread": False})
@@ -70,8 +70,20 @@ def acc(db):
     db.commit()
     for a in out.values():
         db.refresh(a)
+    # สมุดบันทึก for the documents these tests confirm (confirming a posting document needs one).
+    for key, code, side, jt, account, counter in (
+        ("income",  "SALE", BookSide.INCOME,  JournalType.SALES,    "4101", "1201"),
+        ("expense", "PURC", BookSide.EXPENSE, JournalType.PURCHASE, "5401", "2101"),
+        ("deposit", "PDEP", BookSide.EXPENSE, JournalType.PAYMENT,  "1402", "1102"),
+    ):
+        b = DocumentBook(code=code, name=code, side=side, journal_type=jt,
+                         account_id=out[account].id, counter_account_id=out[counter].id, is_active=True)
+        db.add(b); db.commit()
+        BOOKS[key] = str(b.id)
     return out
 
+
+BOOKS: dict = {}   # filled by the acc fixture
 
 @pytest.fixture
 def customer(client, h):
@@ -94,6 +106,7 @@ def _lines(client, h, reference):
 
 def _posted_invoice(client, h, customer, unit_price=1000):
     inv = client.post("/api/v1/ar/invoices", json={"customer_id": customer["id"], "date": "2025-03-01", "vat_rate": 7,
+                      "book_id": BOOKS["income"],
                       "items": [{"description": "สินค้า", "quantity": 1, "unit_price": unit_price}]}, headers=h).json()
     assert client.post(f"/api/v1/ar/invoices/{inv['id']}/post-gl", headers=h).status_code == 200
     return inv
@@ -102,7 +115,7 @@ def _posted_invoice(client, h, customer, unit_price=1000):
 def _sales_note(client, h, customer, inv, doc_type, unit_price=1000):
     return client.post("/api/v1/ar/sales-documents", json={
         "doc_type": doc_type, "customer_id": customer["id"], "date": "2025-03-10", "vat_rate": 7,
-        "invoice_id": inv["id"], "reason": "ทดสอบ",
+        "invoice_id": inv["id"], "reason": "ทดสอบ", "book_id": BOOKS["income"],
         "items": [{"description": "ปรับราคา", "quantity": 1, "unit_price": unit_price}]}, headers=h)
 
 
@@ -112,15 +125,16 @@ def _invoice_balance(client, h, inv_id):
 
 def _posted_bill(client, h, supplier, unit_price=1000):
     bill = client.post("/api/v1/ap/bills", json={"supplier_id": supplier["id"], "date": "2025-03-01", "description": "ค่าบริการ",
-                       "vat_rate": 7, "items": [{"description": "บริการ", "quantity": 1, "unit_price": unit_price}]}, headers=h).json()
+                       "vat_rate": 7, "book_id": BOOKS["expense"], "items": [{"description": "บริการ", "quantity": 1, "unit_price": unit_price}]}, headers=h).json()
     assert client.post(f"/api/v1/ap/bills/{bill['id']}/post-gl", headers=h).status_code == 200
     return bill
 
 
 def _purchase(client, h, supplier, doc_type, **extra):
+    book = BOOKS.get("deposit" if doc_type == "deposit" else "expense")
     return client.post("/api/v1/ap/purchase-documents", json={
         "doc_type": doc_type, "supplier_id": supplier["id"], "date": "2025-03-10", "vat_rate": 7,
-        "items": ITEMS, **extra}, headers=h)
+        "book_id": book, "items": ITEMS, **extra}, headers=h)
 
 
 # ── Sales credit / debit notes ────────────────────────────────
@@ -220,6 +234,22 @@ def test_purchase_note_needs_posted_bill(client, h, acc, supplier):
                         "description": "x", "items": ITEMS}, headers=h).json()
     assert _purchase(client, h, supplier, "credit_note", bill_id=draft["id"]).status_code == 400
     assert _purchase(client, h, supplier, "credit_note").status_code == 400
+
+
+def test_deposit_and_note_need_a_book(client, h, acc, customer, supplier):
+    dep = client.post("/api/v1/ar/sales-documents", headers=h, json={
+        "doc_type": "deposit", "customer_id": customer["id"], "date": "2025-03-10", "vat_rate": 0,
+        "deposit_amount": 500, "items": ITEMS}).json()
+    res = client.post(f"/api/v1/ar/sales-documents/{dep['id']}/post-deposit", headers=h)
+    assert res.status_code == 400 and "สมุดบันทึก" in res.json()["detail"]
+
+    bill = _posted_bill(client, h, supplier)
+    cn = _purchase(client, h, supplier, "credit_note", bill_id=bill["id"], book_id=None).json()
+    res = client.post(f"/api/v1/ap/purchase-documents/{cn['id']}/post-note", headers=h)
+    assert res.status_code == 400 and "สมุดบันทึก" in res.json()["detail"]
+
+    # A book from the wrong side is refused when saving.
+    assert _purchase(client, h, supplier, "deposit", book_id=BOOKS["income"]).status_code == 400
 
 
 # ── Expense-side views and reports ────────────────────────────

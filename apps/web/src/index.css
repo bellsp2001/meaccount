@@ -128,6 +128,46 @@
   --color-card: var(--color-popover);
 }
 
+/* Document form in view mode: the same form, inside <fieldset disabled class="doc-ro">,
+   with its fields reading as plain text so view, create and edit share one layout. */
+fieldset.doc-form { border: 0; margin: 0; padding: 0; min-width: 0; }
+.doc-ro :is(input, select, textarea) {
+  background: transparent !important;
+  border-color: transparent !important;
+  color: var(--color-text) !important;
+  opacity: 1;
+  cursor: default !important;
+  -webkit-appearance: none;
+  appearance: none;
+  resize: none !important;
+}
+.doc-ro :is(input, textarea)::placeholder { color: transparent; }
+.doc-ro input::-webkit-calendar-picker-indicator,
+.doc-ro input::-webkit-inner-spin-button,
+.doc-ro input::-webkit-outer-spin-button { display: none; -webkit-appearance: none; }
+.doc-ro input[type="number"] { -moz-appearance: textfield; }
+.doc-ro .doc-edit-only { display: none !important; }
+/* SearchSelect: no dropdown caret on a read-only document or a disabled field */
+.doc-ro .search-select-caret,
+:disabled + .search-select-caret { display: none; }
+
+/* Document list tables: status badges, dates, amounts and buttons stay on one line; only
+   cells marked .doc-wrap (names, descriptions) wrap. The wrapper scrolls sideways when narrow. */
+.doc-list { width: 100%; border-collapse: collapse; }
+.doc-list :is(th, td) { white-space: nowrap; }
+.doc-list td.doc-wrap { white-space: normal; min-width: 150px; }
+.doc-list .doc-actions { display: flex; gap: 4px; flex-wrap: nowrap; }
+
+/* Create/edit forms shown on the page instead of in a popup: <div className="doc-panel"> holds a
+   back link and a <div className="doc-panel-card">. While a panel is open, the rest of the page
+   (its list, filters, other closed popups) is hidden so the form takes the list's place. */
+.doc-panel { display: flex; flex-direction: column; gap: 12px; }
+.doc-back:hover { background: var(--color-accent) !important; border-color: var(--color-accent) !important; color: #fff !important; }
+.doc-panel-card {
+  background: var(--color-card); border: 1px solid var(--color-border); border-radius: 14px; width: 100%;
+}
+:has(> .doc-panel) > :not(.doc-panel) { display: none !important; }
+
 * { box-sizing: border-box; }
 
 body {

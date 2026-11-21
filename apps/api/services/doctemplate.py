@@ -447,14 +447,30 @@ def render_invoice_pdf(db: Session, invoice_id: UUID, template_id: Optional[UUID
     if cfg["show_due"]:
         meta_pairs.append(("ครบกำหนดชำระ", str(invoice.due_date)))
 
-    totals_rows = [["ยอดรวมก่อนภาษี", f"฿{invoice.subtotal:,.2f}"]]
-    if cfg["show_vat"]:
-        totals_rows.append([f"ภาษีมูลค่าเพิ่ม ({invoice.vat_rate:g}%)", f"฿{invoice.vat_amount:,.2f}"])
-    totals_rows.append(["ยอดรวมทั้งสิ้น", f"฿{invoice.total:,.2f}"])
+    totals_rows = _totals_rows(invoice, cfg)
 
     title = "ใบกำกับภาษี / TAX INVOICE" if as_tax_invoice else "ใบแจ้งหนี้ / INVOICE"
     return _build_business_doc(cfg, title=title, number=invoice.number, customer=_cust_dict(cust),
                                meta_pairs=meta_pairs, items=_items_as_dicts(invoice.items), totals_rows=totals_rows)
+
+
+def _totals_rows(doc, cfg) -> list:
+    """A document's totals rows. A bill discount (ส่วนลดท้ายบิล) shows as รวมเป็นเงิน then the
+    discount — before ยอดรวมก่อนภาษี when it comes off before VAT, after the VAT when after it."""
+    discount = doc.discount_amount or 0
+    after_vat = bool(discount) and doc.discount_after_vat
+    label = f"ส่วนลดท้ายบิล ({Decimal(doc.discount_value).normalize():f}%)" if doc.discount_is_pct else "ส่วนลดท้ายบิล"
+    rows = []
+    if discount and not after_vat:
+        lines = sum((it.amount for it in doc.items), 0)
+        rows += [["รวมเป็นเงิน", f"฿{lines:,.2f}"], [label, f"-฿{discount:,.2f}"]]
+    rows.append(["ยอดรวมก่อนภาษี", f"฿{doc.subtotal:,.2f}"])
+    if cfg["show_vat"]:
+        rows.append([f"ภาษีมูลค่าเพิ่ม ({doc.vat_rate:g}%)", f"฿{doc.vat_amount:,.2f}"])
+    if after_vat:
+        rows += [["รวมเป็นเงิน", f"฿{doc.total + discount:,.2f}"], [f"{label} หลัง VAT", f"-฿{discount:,.2f}"]]
+    rows.append(["ยอดรวมทั้งสิ้น", f"฿{doc.total:,.2f}"])
+    return rows
 
 
 _SALES_DOC_META = {
@@ -481,10 +497,7 @@ def render_sales_document_pdf(db: Session, doc_id: UUID, template_id: Optional[U
     if sdoc.valid_until:
         meta_pairs.append((valid_label, str(sdoc.valid_until)))
 
-    totals_rows = [["ยอดรวมก่อนภาษี", f"฿{sdoc.subtotal:,.2f}"]]
-    if cfg["show_vat"]:
-        totals_rows.append([f"ภาษีมูลค่าเพิ่ม ({sdoc.vat_rate:g}%)", f"฿{sdoc.vat_amount:,.2f}"])
-    totals_rows.append(["ยอดรวมทั้งสิ้น", f"฿{sdoc.total:,.2f}"])
+    totals_rows = _totals_rows(sdoc, cfg)
     if sdoc.doc_type == SalesDocType.DEPOSIT and sdoc.deposit_amount:
         totals_rows.insert(len(totals_rows) - 1, ["เงินมัดจำที่รับ", f"฿{sdoc.deposit_amount:,.2f}"])
 

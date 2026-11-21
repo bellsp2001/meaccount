@@ -4,6 +4,12 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
+import DocSearch from '@/components/doc/DocSearch'
+import PanelBack from '@/components/doc/PanelBack'
+import ColumnPicker from '@/components/doc/ColumnPicker'
+import { useColumns } from '@/components/doc/columns'
+import { matchesSearch } from '@/components/doc/search'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 // ใบเสร็จรับเงิน/การชำระเงิน (ฝั่งค่าใช้จ่าย) — payments made against bills, mirroring ReceiptsPage.
 interface Voucher {
@@ -35,6 +41,12 @@ const ACCENT = '#FF9F0A'
 export default function PaymentVouchersPage() {
   const qc = useQueryClient()
   const [showCreate, setShowCreate] = useState(false)
+  const [search, setSearch] = useState('')
+  const cols = useColumns('payment-vouchers', [
+    { id:'number', label:'เลขที่ใบสำคัญจ่าย', required:true }, { id:'bill', label:'บิล' }, { id:'supplier', label:'ผู้จำหน่าย' },
+    { id:'date', label:'วันที่' }, { id:'method', label:'ช่องทาง' }, { id:'reference', label:'อ้างอิง' },
+    { id:'amount', label:'จำนวนเงิน' }, { id:'gl', label:'GL' },
+  ])
 
   const { data: vouchers = [], isLoading } = useQuery<Voucher[]>({
     queryKey: ['payment-vouchers'],
@@ -61,14 +73,11 @@ export default function PaymentVouchersPage() {
     defaultValues: { date: new Date().toISOString().split('T')[0], method: 'bank_transfer' },
   })
   const selected = payable.find(b => b.id === watch('bill_id'))
+  const shown = vouchers.filter(v => matchesSearch(search, v.voucher_number, v.bill_number, v.supplier_name, v.reference,
+    v.amount, METHOD_LABEL[v.method] || v.method, new Date(v.date).toLocaleDateString('th-TH')))
 
-  const total = vouchers.reduce((s,v)=>s+Number(v.amount),0)
-  const now = new Date()
-  const thisMonth = vouchers.filter(v=>{ const d=new Date(v.date); return d.getMonth()===now.getMonth()&&d.getFullYear()===now.getFullYear() }).reduce((s,v)=>s+Number(v.amount),0)
   const detail = (createM.error as { response?: { data?: { detail?: unknown } } } | null)?.response?.data?.detail
 
-  const overlay: React.CSSProperties = { position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', display:'flex', alignItems:'center', justifyContent:'center', zIndex:50, padding:16 }
-  const modal: React.CSSProperties  = { background:'var(--color-card)', border:'1px solid var(--color-border-strong)', borderRadius:16, width:'100%', maxWidth:480, maxHeight:'92vh', overflowY:'auto' }
   const th: React.CSSProperties = { padding:'10px 12px', textAlign:'left', fontSize:9, fontWeight:700, color:'var(--color-dim)', textTransform:'uppercase', letterSpacing:'0.08em', borderBottom:'1px solid var(--color-border)' }
   const td: React.CSSProperties = { padding:'11px 12px', borderBottom:'1px solid var(--color-border-subtle)', fontSize:11 }
 
@@ -82,36 +91,28 @@ export default function PaymentVouchersPage() {
         <button onClick={()=>setShowCreate(true)} style={{ background:`linear-gradient(135deg,${ACCENT},${ACCENT}CC)`, color:'#2A1600', fontWeight:800, fontSize:13, border:'none', borderRadius:9, padding:'10px 20px', cursor:'pointer' }}>+ บันทึกจ่ายชำระ</button>
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill,minmax(200px,1fr))', gap:12 }}>
-        {[
-          { l:'ยอดจ่ายชำระทั้งหมด', v: baht(total), color: ACCENT },
-          { l:'จ่ายชำระเดือนนี้', v: baht(thisMonth), color:'var(--color-accent-light)' },
-          { l:'บิลรอจ่าย', v: payable.length, color:'#FF6B6B' },
-        ].map(k=>(
-          <div key={k.l} style={{ background:'var(--color-card)', border:`1px solid ${k.color}20`, borderTop:`2px solid ${k.color}`, borderRadius:12, padding:'14px 16px' }}>
-            <p style={{ margin:'0 0 4px', fontSize:10, color:'var(--color-muted)' }}>{k.l}</p>
-            <p style={{ margin:0, fontSize:20, fontWeight:800, color:k.color }}>{k.v}</p>
-          </div>
-        ))}
-      </div>
+      <DocSearch value={search} onChange={setSearch} count={shown.length} total={vouchers.length} placeholder="ค้นหาเลขที่ บิล ผู้จำหน่าย อ้างอิง หรือยอดเงิน">
+        <ColumnPicker cols={cols} />
+      </DocSearch>
 
       <div style={{ background:'var(--color-card)', border:'1px solid var(--color-border)', borderRadius:14, overflow:'auto' }}>
         {isLoading ? <div style={{ padding:48, textAlign:'center', color:'var(--color-dim)' }}>กำลังโหลด...</div>
         : vouchers.length === 0 ? <div style={{ padding:56, textAlign:'center', color:'var(--color-dim)', fontSize:13 }}>ยังไม่มีการจ่ายชำระ — กด “+ บันทึกจ่ายชำระ” เพื่อเริ่ม</div>
+        : shown.length === 0 ? <div style={{ padding:56, textAlign:'center', color:'var(--color-dim)', fontSize:13 }}>ไม่พบรายการที่ค้นหา</div>
         : (
-          <table style={{ width:'100%', borderCollapse:'collapse' }}>
-            <thead><tr>{['เลขที่ใบสำคัญจ่าย','บิล','ผู้จำหน่าย','วันที่','ช่องทาง','อ้างอิง','จำนวนเงิน','GL'].map(h=><th key={h} style={th}>{h}</th>)}</tr></thead>
+          <table className="doc-list">
+            <thead><tr>{cols.visible.map(c=><th key={c.id} style={th}>{c.label}</th>)}</tr></thead>
             <tbody>
-              {vouchers.map(v=>(
+              {shown.map(v=>(
                 <tr key={v.id}>
                   <td style={{ ...td, fontFamily:'monospace', color: ACCENT }}>{v.voucher_number}</td>
-                  <td style={{ ...td, fontFamily:'monospace', color:'var(--color-accent-light)' }}>{v.bill_number || '—'}</td>
-                  <td style={{ ...td, fontSize:12 }}>{v.supplier_name || '—'}</td>
-                  <td style={{ ...td, color:'var(--color-text-tertiary)' }}>{new Date(v.date).toLocaleDateString('th-TH')}</td>
-                  <td style={{ ...td, color:'var(--color-text-tertiary)' }}>{METHOD_LABEL[v.method] || v.method}</td>
-                  <td style={{ ...td, fontFamily:'monospace', color:'var(--color-text-tertiary)' }}>{v.reference || '—'}</td>
-                  <td style={{ ...td, fontSize:12, fontFamily:'monospace', fontWeight:700, color: ACCENT }}>{baht(v.amount)}</td>
-                  <td style={td}>{v.gl_posted ? <span style={{ fontSize:10, color:'#43E97B' }}>✓</span> : <span style={{ fontSize:10, color:'var(--color-dim)' }}>—</span>}</td>
+                  {cols.on('bill') && <td style={{ ...td, fontFamily:'monospace', color:'var(--color-accent-light)' }}>{v.bill_number || '—'}</td>}
+                  {cols.on('supplier') && <td className="doc-wrap" style={{ ...td, fontSize:12 }}>{v.supplier_name || '—'}</td>}
+                  {cols.on('date') && <td style={{ ...td, color:'var(--color-text-tertiary)' }}>{new Date(v.date).toLocaleDateString('th-TH')}</td>}
+                  {cols.on('method') && <td style={{ ...td, color:'var(--color-text-tertiary)' }}>{METHOD_LABEL[v.method] || v.method}</td>}
+                  {cols.on('reference') && <td style={{ ...td, fontFamily:'monospace', color:'var(--color-text-tertiary)' }}>{v.reference || '—'}</td>}
+                  {cols.on('amount') && <td style={{ ...td, fontSize:12, fontFamily:'monospace', fontWeight:700, color: ACCENT }}>{baht(v.amount)}</td>}
+                  {cols.on('gl') && <td style={td}>{v.gl_posted ? <span style={{ fontSize:10, color:'#43E97B' }}>✓</span> : <span style={{ fontSize:10, color:'var(--color-dim)' }}>—</span>}</td>}
                 </tr>
               ))}
             </tbody>
@@ -120,8 +121,9 @@ export default function PaymentVouchersPage() {
       </div>
 
       {showCreate && (
-        <div style={overlay} onClick={()=>setShowCreate(false)}>
-          <div style={modal} onClick={e=>e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={()=>setShowCreate(false)} label="กลับไปที่การชำระเงิน" />
+          <div className="doc-panel-card">
             <div style={{ padding:'18px 24px', borderBottom:'1px solid var(--color-border)', display:'flex', justifyContent:'space-between', alignItems:'center' }}>
               <div><h3 style={{ margin:0, fontSize:15, fontWeight:800 }}>บันทึกจ่ายชำระ</h3><p style={{ margin:0, fontSize:11, color:'var(--color-muted)' }}>เลือกบิลที่อนุมัติแล้วและยังค้างจ่าย</p></div>
               <button onClick={()=>setShowCreate(false)} style={{ background:'none', border:'none', color:'var(--color-muted)', cursor:'pointer', fontSize:18 }}>✕</button>
@@ -129,10 +131,10 @@ export default function PaymentVouchersPage() {
             <form onSubmit={handleSubmit(d=>createM.mutate(d))} style={{ padding:24, display:'flex', flexDirection:'column', gap:16 }}>
               <div>
                 <label style={lbl}>บิลที่ค้างจ่าย *</label>
-                <select {...register('bill_id', { onChange: e => { const b = payable.find(x=>x.id===e.target.value); if (b) setValue('amount', Number(b.balance_due)) } })} style={{ ...inp, cursor:'pointer' }}>
+                <SearchSelect {...register('bill_id', { onChange: e => { const b = payable.find(x=>x.id===e.target.value); if (b) setValue('amount', Number(b.balance_due)) } })} style={{ ...inp, cursor:'pointer' }}>
                   <option value="">-- เลือกบิล --</option>
                   {payable.map(b => <option key={b.id} value={b.id}>{b.number} — {b.supplier?.name || 'ไม่ระบุ'} (ค้าง {baht(b.balance_due)})</option>)}
-                </select>
+                </SearchSelect>
                 {errors.bill_id && <p style={{ margin:'3px 0 0', fontSize:10, color:'#FF6B6B' }}>{errors.bill_id.message}</p>}
                 {payable.length === 0 && <p style={{ margin:'6px 0 0', fontSize:11, color:'var(--color-dim)' }}>ไม่มีบิลค้างจ่าย (บิลต้องได้รับการอนุมัติก่อนจึงจะจ่ายได้)</p>}
               </div>
@@ -146,9 +148,9 @@ export default function PaymentVouchersPage() {
                 <div><label style={lbl}>วันที่จ่าย</label><input {...register('date')} type="date" style={inp} /></div>
                 <div>
                   <label style={lbl}>ช่องทางการจ่าย</label>
-                  <select {...register('method')} style={{ ...inp, cursor:'pointer' }}>
+                  <SearchSelect {...register('method')} style={{ ...inp, cursor:'pointer' }}>
                     {Object.entries(METHOD_LABEL).map(([k,v]) => <option key={k} value={k}>{v}</option>)}
-                  </select>
+                  </SearchSelect>
                 </div>
               </div>
               <div><label style={lbl}>เลขที่อ้างอิง (เลขที่โอน/เช็ค)</label><input {...register('reference')} style={inp} /></div>

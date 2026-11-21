@@ -4,6 +4,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import api from '@/lib/api'
 import { JournalTypeBadge } from '@/components/ui/JournalTypeBadge'
 import { isJournalType } from '@/config/journals'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 // รายงานทางบัญชี: งบทดลอง (trial balance) and บัญชีแยกประเภท (general ledger).
 // Both come from posted journal entries. A trial-balance row links into the ledger.
@@ -139,10 +140,10 @@ export function GeneralLedgerPage() {
 
       <div style={{ display:'flex', gap:8, flexWrap:'wrap' }}>
         <input value={q} onChange={e=>setQ(e.target.value)} placeholder="ค้นหารหัส/ชื่อบัญชี" style={{ ...inp, width:200 }} aria-label="ค้นหาบัญชี" />
-        <select value={accountId} onChange={e=>set('account', e.target.value)} style={{ ...inp, minWidth:280, cursor:'pointer' }} aria-label="เลือกบัญชี">
+        <SearchSelect value={accountId} onChange={e=>set('account', e.target.value)} style={{ ...inp, minWidth:280, cursor:'pointer' }} aria-label="เลือกบัญชี">
           <option value="">-- เลือกบัญชี --</option>
           {options.map(a => <option key={a.id} value={a.id}>{a.code} — {a.name}</option>)}
-        </select>
+        </SearchSelect>
       </div>
 
       {!accountId ? (

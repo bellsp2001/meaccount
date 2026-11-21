@@ -4,6 +4,8 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Employee {
   id: string; employee_code: string; full_name: string; position?: string
@@ -66,8 +68,6 @@ export default function EmployeesPage() {
 
   const totalPayroll = employees.filter(e => e.status === 'active').reduce((s, e) => s + Number(e.base_salary), 0)
 
-  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 560, maxHeight: '90vh', overflowY: 'auto' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -137,8 +137,9 @@ export default function EmployeesPage() {
 
       {/* CREATE MODAL */}
       {showCreate && (
-        <div style={overlay} onClick={() => setShowCreate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowCreate(false)} label="กลับไปที่พนักงาน" />
+          <div className="doc-panel-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>เพิ่มพนักงานใหม่</h3>
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
@@ -163,10 +164,10 @@ export default function EmployeesPage() {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <label style={lbl}>สถานภาพสมรส</label>
-                    <select {...register('marital_status')} style={{ ...inp, cursor: 'pointer' }}>
+                    <SearchSelect {...register('marital_status')} style={{ ...inp, cursor: 'pointer' }}>
                       <option value="single">โสด</option>
                       <option value="married">สมรส</option>
-                    </select>
+                    </SearchSelect>
                   </div>
                   <div><label style={lbl}>จำนวนบุตร</label><input {...register('num_children', { valueAsNumber: true })} type="number" min="0" max="10" style={inp} /></div>
                 </div>

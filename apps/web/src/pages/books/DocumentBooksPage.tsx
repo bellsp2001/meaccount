@@ -6,6 +6,8 @@ import { z } from 'zod'
 import api from '@/lib/api'
 import { JOURNAL_TYPES, type JournalType } from '@/config/journals'
 import { JournalTypeBadge } from '@/components/ui/JournalTypeBadge'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 // ── Types ──────────────────────────────────────────────────────
 type Side = 'income' | 'expense'
@@ -226,8 +228,9 @@ export default function DocumentBooksPage({ side }: { side: Side }) {
 
       {/* CREATE / EDIT MODAL */}
       {editing && (
-        <div style={overlay} onClick={() => setEditing(null)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setEditing(null)} label="กลับไปที่สมุดบันทึก" />
+          <div className="doc-panel-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 16, fontWeight: 800 }}>{isNew ? `สร้างสมุดบันทึก${meta.noun}` : `แก้ไขสมุดบันทึก${meta.noun}`}</h3>
               <button onClick={() => setEditing(null)} aria-label="ปิด" style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
@@ -248,35 +251,35 @@ export default function DocumentBooksPage({ side }: { side: Side }) {
 
               <div>
                 <label style={lbl}>ลงบันทึกผ่านสมุดรายวัน</label>
-                <select {...register('journal_type')} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect {...register('journal_type')} style={{ ...inp, cursor: 'pointer' }}>
                   {JOURNAL_TYPES.map(t => <option key={t.key} value={t.key}>{t.full}</option>)}
-                </select>
+                </SearchSelect>
               </div>
 
               <div>
                 <label style={lbl}>{meta.mainLabel}</label>
-                <select {...register('account_id')} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect {...register('account_id')} style={{ ...inp, cursor: 'pointer' }}>
                   <option value="">-- เลือกบัญชีจากผังบัญชี --</option>
                   <AccountOptions accounts={accounts} types={meta.mainTypes} />
-                </select>
+                </SearchSelect>
                 {errors.account_id && <p style={err}>{errors.account_id.message}</p>}
               </div>
 
               <div>
                 <label style={lbl}>บัญชีคู่</label>
-                <select {...register('counter_account_id')} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect {...register('counter_account_id')} style={{ ...inp, cursor: 'pointer' }}>
                   <option value="">-- ไม่ระบุ --</option>
                   <AccountOptions accounts={accounts} types={COUNTER_TYPES} />
-                </select>
+                </SearchSelect>
                 <p style={hint}>{meta.counterHint}</p>
               </div>
 
               <div>
                 <label style={lbl}>ภาษี</label>
-                <select {...register('tax_code_id')} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect {...register('tax_code_id')} style={{ ...inp, cursor: 'pointer' }}>
                   <option value="">-- ไม่มีภาษี --</option>
                   {taxOptions.map(t => <option key={t.id} value={t.id}>{t.code} — {t.name}</option>)}
-                </select>
+                </SearchSelect>
                 <p style={hint}>จัดการรายการภาษีได้ที่ การบัญชี › ประเภทภาษี</p>
               </div>
 

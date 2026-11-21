@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from core.database import Base, get_db
 from core.security import hash_password
 from models.user import User, UserRole
-from models.accounting import Account, AccountTypeEnum, NormalBalance
+from models.accounting import Account, AccountTypeEnum, NormalBalance, DocumentBook, BookSide, JournalType
 from main import app
 
 engine = create_engine("sqlite:///./test_ar.db", connect_args={"check_same_thread": False})
@@ -52,6 +52,15 @@ def gl_accounts(db):
     for a in accs: db.add(a)
     db.commit()
     return accs
+
+@pytest.fixture
+def book(db, gl_accounts):
+    """An income สมุดบันทึก — confirming (posting) an invoice needs one."""
+    acc = {a.code: a for a in gl_accounts}
+    b = DocumentBook(code="INV", name="ขายเชื่อ", side=BookSide.INCOME, journal_type=JournalType.SALES,
+                     account_id=acc["4101"].id, counter_account_id=acc["1201"].id, is_active=True)
+    db.add(b); db.commit(); db.refresh(b)
+    return str(b.id)
 
 @pytest.fixture
 def customer(client, token):
@@ -106,9 +115,9 @@ def test_invoice_no_items_rejected(client, token, customer):
     }, headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 422
 
-def test_post_invoice_to_gl(client, token, customer, gl_accounts, db):
+def test_post_invoice_to_gl(client, token, customer, gl_accounts, book, db):
     inv_res = client.post("/api/v1/ar/invoices", json={
-        "customer_id": customer["id"], "date": "2024-01-15",
+        "customer_id": customer["id"], "date": "2024-01-15", "book_id": book,
         "items": [{"description": "บริการ", "quantity": 1, "unit_price": 10000}]
     }, headers={"Authorization": f"Bearer {token}"})
     inv_id = inv_res.json()["id"]
@@ -124,10 +133,19 @@ def test_post_invoice_to_gl(client, token, customer, gl_accounts, db):
     db.refresh(ar_acc)
     assert ar_acc.balance > 0
 
-# ── Payment ───────────────────────────────────────────────────
-def test_receive_payment_full(client, token, customer, gl_accounts):
-    inv_res = client.post("/api/v1/ar/invoices", json={
+
+def test_invoice_without_book_cannot_be_confirmed(client, token, customer, gl_accounts):
+    inv = client.post("/api/v1/ar/invoices", json={
         "customer_id": customer["id"], "date": "2024-01-15",
+        "items": [{"description": "บริการ", "quantity": 1, "unit_price": 10000}]
+    }, headers={"Authorization": f"Bearer {token}"}).json()
+    res = client.post(f"/api/v1/ar/invoices/{inv['id']}/post-gl", headers={"Authorization": f"Bearer {token}"})
+    assert res.status_code == 400 and "สมุดบันทึก" in res.json()["detail"]
+
+# ── Payment ───────────────────────────────────────────────────
+def test_receive_payment_full(client, token, customer, gl_accounts, book):
+    inv_res = client.post("/api/v1/ar/invoices", json={
+        "customer_id": customer["id"], "date": "2024-01-15", "book_id": book,
         "items": [{"description": "บริการ", "quantity": 1, "unit_price": 5000}]
     }, headers={"Authorization": f"Bearer {token}"})
     inv = inv_res.json()
@@ -161,9 +179,9 @@ def test_overpayment_rejected(client, token, customer, gl_accounts):
     }, headers={"Authorization": f"Bearer {token}"})
     assert res.status_code == 400
 
-def test_partial_payment(client, token, customer, gl_accounts):
+def test_partial_payment(client, token, customer, gl_accounts, book):
     inv_res = client.post("/api/v1/ar/invoices", json={
-        "customer_id": customer["id"], "date": "2024-01-15",
+        "customer_id": customer["id"], "date": "2024-01-15", "book_id": book,
         "items": [{"description": "บริการ", "quantity": 1, "unit_price": 10000}]
     }, headers={"Authorization": f"Bearer {token}"})
     inv = inv_res.json()

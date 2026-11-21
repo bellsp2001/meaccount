@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Example { id: string; question: string; answer: string }
 interface Profile { id: string; name: string; industry: string; system_prompt: string; model_string: string; is_active: boolean; examples: Example[] }
@@ -68,8 +70,9 @@ export default function PromptProfilesPage() {
       </div>
 
       {showCreate && (
-        <div style={overlay} onClick={() => setShowCreate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowCreate(false)} label="กลับไปที่ Prompt Profiles" />
+          <div className="doc-panel-card">
             <div style={{ padding: '18px 24px', borderBottom: '1px solid #151C28', display: 'flex', justifyContent: 'space-between' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>สร้าง Prompt Profile ใหม่</h3>
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: '#4A5A70', cursor: 'pointer', fontSize: 18 }}>✕</button>
@@ -79,9 +82,9 @@ export default function PromptProfilesPage() {
                 <div><label style={lbl}>ชื่อ Profile</label><input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="เช่น ร้านค้าปลีก" style={inp} /></div>
                 <div>
                   <label style={lbl}>ประเภทธุรกิจ</label>
-                  <select value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+                  <SearchSelect value={form.industry} onChange={e => setForm({ ...form, industry: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
                     {Object.entries(INDUSTRY_META).map(([k, v]) => <option key={k} value={k}>{v.label}</option>)}
-                  </select>
+                  </SearchSelect>
                 </div>
               </div>
               <div><label style={lbl}>System Prompt</label><textarea value={form.system_prompt} onChange={e => setForm({ ...form, system_prompt: e.target.value })} rows={4} placeholder="คุณเป็นผู้เชี่ยวชาญบัญชีสำหรับธุรกิจ..." style={{ ...inp, resize: 'vertical' }} /></div>

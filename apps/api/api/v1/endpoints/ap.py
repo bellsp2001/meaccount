@@ -19,7 +19,7 @@ from schemas.ap import (
 from services.ap import (
     get_suppliers, create_supplier, update_supplier,
     get_categories, seed_default_categories,
-    create_bill, get_bills, submit_for_approval,
+    create_bill, update_bill, get_bills, submit_for_approval,
     process_approval, post_bill_to_gl, pay_bill, get_ap_summary,
 )
 from services.ai_ap import categorize_expense, ocr_receipt
@@ -83,6 +83,12 @@ def create_bill_endpoint(payload: BillCreate,
                          current_user: User = Depends(require_accountant_up),
                          db: Session = Depends(get_db)):
     return create_bill(db, payload, user_id=current_user.id)
+
+
+@router.put("/bills/{bid}", response_model=BillResponse)
+def update_bill_endpoint(bid: UUID, payload: BillCreate,
+                         current_user: User = Depends(require_accountant_up), db: Session = Depends(get_db)):
+    return update_bill(db, bid, payload)
 
 
 @router.get("/bills/{bid}", response_model=BillResponse)

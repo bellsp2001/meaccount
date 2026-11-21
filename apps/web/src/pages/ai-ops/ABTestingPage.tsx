@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Profile { id: string; name: string }
 interface ABTest { id: string; name: string; profile_a_id: string; profile_b_id: string; traffic_split_pct: number; is_active: boolean }
@@ -91,19 +93,20 @@ export default function ABTestingPage() {
       </div>
 
       {showCreate && (
-        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }} onClick={() => setShowCreate(false)}>
-          <div style={{ background: '#0D1018', border: '1px solid #1E2A3A', borderRadius: 16, width: '100%', maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowCreate(false)} label="กลับไปที่ A/B Testing" />
+          <div className="doc-panel-card">
             <div style={{ padding: '18px 24px', borderBottom: '1px solid #151C28' }}><h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>สร้าง A/B Test</h3></div>
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="ชื่อการทดสอบ" style={inp} />
-              <select value={form.profile_a_id} onChange={e => setForm({ ...form, profile_a_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+              <SearchSelect value={form.profile_a_id} onChange={e => setForm({ ...form, profile_a_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
                 <option value="">-- Profile A --</option>
                 {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
-              <select value={form.profile_b_id} onChange={e => setForm({ ...form, profile_b_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+              </SearchSelect>
+              <SearchSelect value={form.profile_b_id} onChange={e => setForm({ ...form, profile_b_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
                 <option value="">-- Profile B --</option>
                 {profiles.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-              </select>
+              </SearchSelect>
               <div>
                 <label style={{ fontSize: 10, color: '#6A7A90', display: 'block', marginBottom: 6 }}>Traffic Split (% ไปยัง B): {form.traffic_split_pct}%</label>
                 <input type="range" min="0" max="100" value={form.traffic_split_pct} onChange={e => setForm({ ...form, traffic_split_pct: Number(e.target.value) })} style={{ width: '100%' }} />

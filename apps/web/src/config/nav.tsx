@@ -37,10 +37,10 @@ export const NAV: NavItem[] = [
     ],
   },
   {
-    to: '/ar/customers', icon: 'contacts', label: 'ผู้ติดต่อ', roles: ['admin','accountant','cashier'],
+    to: '/contacts', icon: 'contacts', label: 'ผู้ติดต่อ', roles: ['admin','accountant','cashier'],
     children: [
-      { to: '/ar/customers', label: 'ลูกค้า' },
-      { to: '/ap/suppliers', label: 'ผู้จำหน่าย' },
+      { to: '/contacts',        label: 'รายชื่อผู้ติดต่อ' },
+      { to: '/contacts/groups', label: 'กลุ่มประเภทลูกค้า' },
     ],
   },
   {
@@ -51,7 +51,6 @@ export const NAV: NavItem[] = [
       { to: '/gl/tax-types', label: 'ประเภทภาษี' },
     ],
   },
-  { to: '/pos', icon: 'pos', label: 'POS หน้าร้าน', roles: ['admin','cashier','accountant'], badge: 'New' },
   {
     to: '/inventory', icon: 'inventory', label: 'สินค้าคงคลัง', roles: ['admin','inventory','accountant'],
     children: [
@@ -85,28 +84,6 @@ export const NAV: NavItem[] = [
       { to: '/reports/ap-aging',      label: 'อายุเจ้าหนี้',         roles: ['admin','accountant'] },
     ],
   },
-  { to: '/ai-chat',   icon: 'ai', label: 'AI Assistant', roles: ['admin','accountant','manager'], badge: 'Beta' },
-  {
-    to: '/audit', icon: 'audit', label: 'AI Audit', roles: ['admin','manager','auditor'],
-    children: [
-      { to: '/audit', label: 'AI Audit' },
-      { to: '/fraud', label: 'Fraud Detection' },
-    ],
-  },
-  {
-    to: '/documents', icon: 'documents', label: 'Document AI', roles: ['admin','accountant','cashier'],
-    children: [
-      { to: '/documents',       label: 'Document Center' },
-      { to: '/documents/match', label: '3-Way Match' },
-    ],
-  },
-  {
-    to: '/companies', icon: 'building', label: 'บริษัทในเครือ', roles: ['admin','accountant'], badge: 'New',
-    children: [
-      { to: '/companies',             label: 'บริษัททั้งหมด' },
-      { to: '/companies/consolidated', label: 'งบการเงินรวม' },
-    ],
-  },
   {
     // Platform/admin tools grouped under one entry; each page keeps its own role from App.tsx.
     to: '/developer/integrations', icon: 'settings', label: 'ตั้งค่าระบบ', roles: ['admin','accountant'],
@@ -122,6 +99,16 @@ export const NAV: NavItem[] = [
   },
   { to: '/users',     icon: 'users', label: 'จัดการผู้ใช้', roles: ['admin'] },
 ]
+
+/** บริษัทในเครือ — opened from the company/branch switcher in the top bar, not the side menu.
+ *  Each link keeps its page's role from App.tsx. */
+export const COMPANY_NAV: NavItem = {
+  to: '/companies', icon: 'building', label: 'บริษัทในเครือ', roles: ['admin','accountant'],
+  children: [
+    { to: '/companies',              label: 'จัดการบริษัท/สาขา', roles: ['admin'] },
+    { to: '/companies/consolidated', label: 'งบการเงินรวม' },
+  ],
+}
 
 // iOS home-screen palette — a stable hue per app so the dock reads like a
 // colourful, frosted app grid.
@@ -148,7 +135,7 @@ export function allowedNav(role?: string): NavItem[] {
 }
 
 /** Resolve the top-level app that owns the current path. An exact route match wins over a
- *  path prefix, so /ar/customers belongs to ผู้ติดต่อ rather than to /ar. */
+ *  path prefix, so /ar/tax-invoices belongs to การขาย rather than to a parent at /ar. */
 export function findActiveNav(pathname: string, items: NavItem[] = NAV): NavItem | undefined {
   return items.find(item => pathname === item.to || item.children?.some(c => pathname === c.to))
     ?? items.find(item => pathname.startsWith(item.to + '/') && item.to !== '/dashboard')

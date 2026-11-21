@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface WHTCert {
   id: string; number: string; wht_type: string; payer_name: string
@@ -50,8 +52,6 @@ export default function WHTCertificatesPage() {
   })
 
   const totalWHT = certs.reduce((s, c) => s + Number(c.wht_amount), 0)
-  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 520, maxHeight: '90vh', overflowY: 'auto' }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -112,15 +112,16 @@ export default function WHTCertificatesPage() {
 
       {/* BULK GENERATE MODAL */}
       {showBulk && (
-        <div style={overlay} onClick={() => setShowBulk(false)}>
-          <div style={{ ...modal, maxWidth: 440 }} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowBulk(false)} label="กลับไปที่หนังสือรับรองหัก ณ ที่จ่าย" />
+          <div className="doc-panel-card">
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}><span style={{ fontSize: 20 }}>🤖</span><h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>สร้างอัตโนมัติจาก Bills</h3></div>
               <button onClick={() => setShowBulk(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
             </div>
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                <div><label style={lbl}>เดือน</label><select value={bulkMonth} onChange={e => setBulkMonth(Number(e.target.value))} style={{ ...inp, cursor: 'pointer' }}>{Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}</select></div>
+                <div><label style={lbl}>เดือน</label><SearchSelect value={bulkMonth} onChange={e => setBulkMonth(Number(e.target.value))} style={{ ...inp, cursor: 'pointer' }}>{Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}</SearchSelect></div>
                 <div><label style={lbl}>ปี</label><input type="number" value={bulkYear} onChange={e => setBulkYear(Number(e.target.value))} style={inp} /></div>
               </div>
               <div><label style={lbl}>ชื่อบริษัท (ผู้จ่ายเงิน)</label><input value={payerName} onChange={e => setPayerName(e.target.value)} style={inp} /></div>
@@ -140,8 +141,9 @@ export default function WHTCertificatesPage() {
 
       {/* CREATE SINGLE MODAL */}
       {showCreate && (
-        <div style={overlay} onClick={() => setShowCreate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowCreate(false)} label="กลับไปที่หนังสือรับรองหัก ณ ที่จ่าย" />
+          <div className="doc-panel-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>สร้างหนังสือรับรองใหม่</h3>
               <button onClick={() => setShowCreate(false)} style={{ background: 'none', border: 'none', color: 'var(--color-muted)', cursor: 'pointer', fontSize: 18 }}>✕</button>
@@ -149,11 +151,11 @@ export default function WHTCertificatesPage() {
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={lbl}>ประเภทแบบ</label>
-                <select value={form.wht_type} onChange={e => setForm({ ...form, wht_type: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect value={form.wht_type} onChange={e => setForm({ ...form, wht_type: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
                   <option value="pnd1">ภงด.1 — เงินเดือน</option>
                   <option value="pnd3">ภงด.3 — บุคคลธรรมดา</option>
                   <option value="pnd53">ภงด.53 — นิติบุคคล</option>
-                </select>
+                </SearchSelect>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 <div><label style={lbl}>ชื่อผู้จ่ายเงิน</label><input value={form.payer_name} onChange={e => setForm({ ...form, payer_name: e.target.value })} style={inp} /></div>
@@ -169,9 +171,9 @@ export default function WHTCertificatesPage() {
                 <div><label style={lbl}>จำนวนเงินได้ (บาท) *</label><input type="number" value={form.gross_amount} onChange={e => setForm({ ...form, gross_amount: e.target.value })} style={inp} /></div>
                 <div>
                   <label style={lbl}>อัตราหัก (%)</label>
-                  <select value={form.wht_rate} onChange={e => setForm({ ...form, wht_rate: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+                  <SearchSelect value={form.wht_rate} onChange={e => setForm({ ...form, wht_rate: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
                     <option value="1">1% (ขนส่ง)</option><option value="2">2%</option><option value="3">3% (บริการ)</option><option value="5">5% (ค่าเช่า)</option>
-                  </select>
+                  </SearchSelect>
                 </div>
               </div>
               {form.gross_amount && (

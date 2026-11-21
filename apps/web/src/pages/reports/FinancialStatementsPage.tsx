@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 // ── Types ─────────────────────────────────────────────────────
 interface LineItem { account_code: string; account_name: string; amount?: number; balance?: number }
@@ -233,9 +234,9 @@ export default function FinancialStatementsPage() {
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <div>
                 <label style={{ display: 'block', fontSize: 10, color: 'var(--color-muted)', marginBottom: 6 }}>เดือน</label>
-                <select value={closeMonth} onChange={e => setCloseMonth(Number(e.target.value))} style={{ background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
+                <SearchSelect value={closeMonth} onChange={e => setCloseMonth(Number(e.target.value))} style={{ background: 'var(--color-bg-inset)', border: '1px solid var(--color-border)', borderRadius: 8, padding: '8px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
                   {Array.from({ length: 12 }, (_, i) => <option key={i} value={i + 1}>{i + 1}</option>)}
-                </select>
+                </SearchSelect>
               </div>
               <div>
                 <label style={{ display: 'block', fontSize: 10, color: 'var(--color-muted)', marginBottom: 6 }}>ปี</label>

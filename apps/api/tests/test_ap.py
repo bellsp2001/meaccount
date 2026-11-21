@@ -7,7 +7,7 @@ from sqlalchemy.orm import sessionmaker
 from core.database import Base, get_db
 from core.security import hash_password
 from models.user import User, UserRole
-from models.accounting import Account, AccountTypeEnum, NormalBalance
+from models.accounting import Account, AccountTypeEnum, NormalBalance, DocumentBook, BookSide, JournalType
 from main import app
 
 engine = create_engine("sqlite:///./test_ap.db", connect_args={"check_same_thread": False})
@@ -57,6 +57,15 @@ def gl_accounts(db):
     db.commit(); return accs
 
 @pytest.fixture
+def book(db, gl_accounts):
+    """An expense สมุดบันทึก — confirming (submitting / posting) a bill needs one."""
+    acc = {a.code: a for a in gl_accounts}
+    b = DocumentBook(code="EXP", name="ซื้อเชื่อ", side=BookSide.EXPENSE, journal_type=JournalType.PURCHASE,
+                     account_id=acc["5401"].id, counter_account_id=acc["2101"].id, is_active=True)
+    db.add(b); db.commit(); db.refresh(b)
+    return str(b.id)
+
+@pytest.fixture
 def supplier(client, acc_token):
     res = client.post("/api/v1/ap/suppliers", json={
         "code": "S001", "name": "บริษัท ซัพพลายเออร์ จำกัด",
@@ -72,15 +81,15 @@ def test_create_supplier(client, acc_token):
     assert res.status_code == 200
     assert res.json()["code"] == "S001"
 
-def test_duplicate_supplier_code(client, acc_token, supplier):
+def test_duplicate_supplier_code(client, acc_token, supplier, book):
     res = client.post("/api/v1/ap/suppliers", json={"code": "S001", "name": "Dup", "payment_terms": 30},
                       headers={"Authorization": f"Bearer {acc_token}"})
     assert res.status_code == 400
 
 # ── Bill ──────────────────────────────────────────────────────
-def test_create_bill(client, acc_token, supplier):
+def test_create_bill(client, acc_token, supplier, book):
     res = client.post("/api/v1/ap/bills", json={
-        "supplier_id": supplier["id"], "date": "2024-02-01", "description": "ค่าวัสดุสำนักงาน",
+        "supplier_id": supplier["id"], "book_id": book, "date": "2024-02-01", "description": "ค่าวัสดุสำนักงาน",
         "vat_rate": 7, "wht_rate": 3,
         "items": [{"description": "กระดาษ A4", "quantity": 5, "unit_price": 200}],
     }, headers={"Authorization": f"Bearer {acc_token}"})
@@ -94,7 +103,7 @@ def test_create_bill(client, acc_token, supplier):
     assert float(data["net_payable"]) == pytest.approx(1040, rel=0.01)
     assert data["status"] == "draft"
 
-def test_bill_no_items_rejected(client, acc_token, supplier):
+def test_bill_no_items_rejected(client, acc_token, supplier, book):
     res = client.post("/api/v1/ap/bills", json={
         "supplier_id": supplier["id"], "date": "2024-02-01",
         "description": "ทดสอบ", "items": [],
@@ -102,9 +111,9 @@ def test_bill_no_items_rejected(client, acc_token, supplier):
     assert res.status_code == 422
 
 # ── Approval Workflow ─────────────────────────────────────────
-def test_submit_for_approval(client, acc_token, supplier):
+def test_submit_for_approval(client, acc_token, supplier, book):
     bill = client.post("/api/v1/ap/bills", json={
-        "supplier_id": supplier["id"], "date": "2024-02-01", "description": "ค่าเช่า",
+        "supplier_id": supplier["id"], "book_id": book, "date": "2024-02-01", "description": "ค่าเช่า",
         "items": [{"description": "ค่าเช่าสำนักงาน", "quantity": 1, "unit_price": 15000}],
     }, headers={"Authorization": f"Bearer {acc_token}"}).json()
 
@@ -113,9 +122,9 @@ def test_submit_for_approval(client, acc_token, supplier):
     assert res.status_code == 200
     assert res.json()["status"] == "pending_approval"
 
-def test_manager_can_approve(client, acc_token, mgr_token, supplier, db):
+def test_manager_can_approve(client, acc_token, mgr_token, supplier, book, db):
     bill = client.post("/api/v1/ap/bills", json={
-        "supplier_id": supplier["id"], "date": "2024-02-01", "description": "ค่าไฟ",
+        "supplier_id": supplier["id"], "book_id": book, "date": "2024-02-01", "description": "ค่าไฟ",
         "items": [{"description": "ค่าไฟฟ้า", "quantity": 1, "unit_price": 3000}],
     }, headers={"Authorization": f"Bearer {acc_token}"}).json()
     client.post(f"/api/v1/ap/bills/{bill['id']}/submit", headers={"Authorization": f"Bearer {acc_token}"})
@@ -126,9 +135,9 @@ def test_manager_can_approve(client, acc_token, mgr_token, supplier, db):
     assert res.status_code == 200
     assert res.json()["status"] == "approved"
 
-def test_accountant_cannot_approve(client, acc_token, supplier):
+def test_accountant_cannot_approve(client, acc_token, supplier, book):
     bill = client.post("/api/v1/ap/bills", json={
-        "supplier_id": supplier["id"], "date": "2024-02-01", "description": "ทดสอบ",
+        "supplier_id": supplier["id"], "book_id": book, "date": "2024-02-01", "description": "ทดสอบ",
         "items": [{"description": "รายการ", "quantity": 1, "unit_price": 1000}],
     }, headers={"Authorization": f"Bearer {acc_token}"}).json()
     client.post(f"/api/v1/ap/bills/{bill['id']}/submit", headers={"Authorization": f"Bearer {acc_token}"})
@@ -138,9 +147,9 @@ def test_accountant_cannot_approve(client, acc_token, supplier):
                       headers={"Authorization": f"Bearer {acc_token}"})
     assert res.status_code == 403
 
-def test_reject_bill(client, acc_token, mgr_token, supplier):
+def test_reject_bill(client, acc_token, mgr_token, supplier, book):
     bill = client.post("/api/v1/ap/bills", json={
-        "supplier_id": supplier["id"], "date": "2024-02-01", "description": "ค่าใช้จ่ายไม่สมเหตุ",
+        "supplier_id": supplier["id"], "book_id": book, "date": "2024-02-01", "description": "ค่าใช้จ่ายไม่สมเหตุ",
         "items": [{"description": "อื่นๆ", "quantity": 1, "unit_price": 50000}],
     }, headers={"Authorization": f"Bearer {acc_token}"}).json()
     client.post(f"/api/v1/ap/bills/{bill['id']}/submit", headers={"Authorization": f"Bearer {acc_token}"})
@@ -151,10 +160,19 @@ def test_reject_bill(client, acc_token, mgr_token, supplier):
     assert res.status_code == 200
     assert res.json()["status"] == "rejected"
 
-# ── GL Posting ────────────────────────────────────────────────
-def test_post_bill_to_gl(client, acc_token, mgr_token, supplier, gl_accounts, db):
+def test_bill_without_book_cannot_be_confirmed(client, acc_token, supplier):
     bill = client.post("/api/v1/ap/bills", json={
-        "supplier_id": supplier["id"], "date": "2024-02-01", "description": "ค่าวัสดุ",
+        "supplier_id": supplier["id"], "date": "2024-02-01", "description": "ไม่มีสมุด",
+        "items": [{"description": "x", "quantity": 1, "unit_price": 1000}],
+    }, headers={"Authorization": f"Bearer {acc_token}"}).json()
+    for action in ("submit", "post-gl"):
+        res = client.post(f"/api/v1/ap/bills/{bill['id']}/{action}", headers={"Authorization": f"Bearer {acc_token}"})
+        assert res.status_code == 400 and "สมุดบันทึก" in res.json()["detail"]
+
+# ── GL Posting ────────────────────────────────────────────────
+def test_post_bill_to_gl(client, acc_token, mgr_token, supplier, book, gl_accounts, db):
+    bill = client.post("/api/v1/ap/bills", json={
+        "supplier_id": supplier["id"], "book_id": book, "date": "2024-02-01", "description": "ค่าวัสดุ",
         "items": [{"description": "กระดาษ", "quantity": 1, "unit_price": 5000}],
     }, headers={"Authorization": f"Bearer {acc_token}"}).json()
 
@@ -169,9 +187,9 @@ def test_post_bill_to_gl(client, acc_token, mgr_token, supplier, gl_accounts, db
     assert ap_acc.balance > 0
 
 # ── Payment ───────────────────────────────────────────────────
-def test_pay_bill(client, acc_token, mgr_token, supplier, gl_accounts, db):
+def test_pay_bill(client, acc_token, mgr_token, supplier, book, gl_accounts, db):
     bill = client.post("/api/v1/ap/bills", json={
-        "supplier_id": supplier["id"], "date": "2024-02-01", "description": "ค่าเช่า",
+        "supplier_id": supplier["id"], "book_id": book, "date": "2024-02-01", "description": "ค่าเช่า",
         "items": [{"description": "ค่าเช่า", "quantity": 1, "unit_price": 20000}],
     }, headers={"Authorization": f"Bearer {acc_token}"}).json()
     client.post(f"/api/v1/ap/bills/{bill['id']}/submit", headers={"Authorization": f"Bearer {acc_token}"})
@@ -188,9 +206,9 @@ def test_pay_bill(client, acc_token, mgr_token, supplier, gl_accounts, db):
                             headers={"Authorization": f"Bearer {acc_token}"})
     assert bill_check.json()["status"] == "paid"
 
-def test_overpayment_rejected(client, acc_token, mgr_token, supplier, gl_accounts):
+def test_overpayment_rejected(client, acc_token, mgr_token, supplier, book, gl_accounts):
     bill = client.post("/api/v1/ap/bills", json={
-        "supplier_id": supplier["id"], "date": "2024-02-01", "description": "ทดสอบ",
+        "supplier_id": supplier["id"], "book_id": book, "date": "2024-02-01", "description": "ทดสอบ",
         "items": [{"description": "x", "quantity": 1, "unit_price": 1000}],
     }, headers={"Authorization": f"Bearer {acc_token}"}).json()
     client.post(f"/api/v1/ap/bills/{bill['id']}/submit", headers={"Authorization": f"Bearer {acc_token}"})

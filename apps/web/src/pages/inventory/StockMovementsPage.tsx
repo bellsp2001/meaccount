@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Product   { id: string; sku: string; name: string; unit: string; qty_on_hand: number }
 interface Warehouse  { id: string; code: string; name: string }
@@ -81,8 +83,6 @@ export default function StockMovementsPage() {
   const isPending = receiveM.isPending || issueM.isPending || adjustM.isPending
   const isError   = receiveM.isError || issueM.isError || adjustM.isError
 
-  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties  = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 480 }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -154,8 +154,9 @@ export default function StockMovementsPage() {
 
       {/* FORM MODAL */}
       {showForm && (
-        <div style={overlay} onClick={() => setShowForm(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowForm(false)} label="กลับไปที่การเคลื่อนไหวสต็อก" />
+          <div className="doc-panel-card">
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>
                 {tab === 'receive' ? '⬇ รับสินค้าเข้าคลัง' : tab === 'issue' ? '⬆ จ่ายสินค้าออก' : '⚙ ปรับปรุงสต็อก'}
@@ -165,17 +166,17 @@ export default function StockMovementsPage() {
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div>
                 <label style={lbl}>สินค้า</label>
-                <select value={form.product_id} onChange={e => setForm({ ...form, product_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect value={form.product_id} onChange={e => setForm({ ...form, product_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
                   <option value="">-- เลือกสินค้า --</option>
                   {products.map(p => <option key={p.id} value={p.id}>{p.sku} — {p.name} (คงเหลือ {Number(p.qty_on_hand).toLocaleString('th-TH')} {p.unit})</option>)}
-                </select>
+                </SearchSelect>
               </div>
               <div>
                 <label style={lbl}>คลังสินค้า</label>
-                <select value={form.warehouse_id} onChange={e => setForm({ ...form, warehouse_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect value={form.warehouse_id} onChange={e => setForm({ ...form, warehouse_id: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
                   <option value="">-- เลือกคลัง --</option>
                   {warehouses.map(w => <option key={w.id} value={w.id}>{w.code} — {w.name}</option>)}
-                </select>
+                </SearchSelect>
               </div>
               <div style={{ display: 'grid', gridTemplateColumns: tab === 'receive' ? '1fr 1fr' : '1fr', gap: 12 }}>
                 <div><label style={lbl}>วันที่</label><input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} style={inp} /></div>
@@ -184,10 +185,10 @@ export default function StockMovementsPage() {
               {tab === 'adjust' && (
                 <div>
                   <label style={lbl}>ทิศทางการปรับปรุง</label>
-                  <select value={form.direction} onChange={e => setForm({ ...form, direction: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
+                  <SearchSelect value={form.direction} onChange={e => setForm({ ...form, direction: e.target.value })} style={{ ...inp, cursor: 'pointer' }}>
                     <option value="in">เพิ่มสต็อก (พบสินค้าเกิน)</option>
                     <option value="out">ลดสต็อก (สินค้าเสียหาย/สูญหาย)</option>
-                  </select>
+                  </SearchSelect>
                 </div>
               )}
               <div>

@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import PanelBack from '@/components/doc/PanelBack'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface DocTemplate {
   id: string; name: string; document_kind: string; is_default: boolean; layout_style: string
@@ -78,8 +80,6 @@ export default function DocTemplateEditorPage() {
     setPreviewUrl(url)
   }
 
-  const overlay: React.CSSProperties = { position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 16 }
-  const modal: React.CSSProperties = { background: 'var(--color-card)', border: '1px solid var(--color-border-strong)', borderRadius: 16, width: '100%', maxWidth: 400 }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -137,16 +137,16 @@ export default function DocTemplateEditorPage() {
 
             <div>
               <label style={lbl}>รูปแบบเลย์เอาต์</label>
-              <select value={selected.layout_style} onChange={e => field('layout_style', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+              <SearchSelect value={selected.layout_style} onChange={e => field('layout_style', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                 {LAYOUTS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-              </select>
+              </SearchSelect>
             </div>
 
             <div>
               <label style={lbl}>ฟอนต์</label>
-              <select value={selected.font_family} onChange={e => field('font_family', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+              <SearchSelect value={selected.font_family} onChange={e => field('font_family', e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                 {FONTS.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
-              </select>
+              </SearchSelect>
             </div>
 
             <div>
@@ -181,10 +181,10 @@ export default function DocTemplateEditorPage() {
         {/* Preview panel */}
         <div style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 14, padding: 16, display: 'flex', flexDirection: 'column', gap: 10 }}>
           <p style={{ margin: 0, fontSize: 12, fontWeight: 700 }}>ดูตัวอย่าง</p>
-          <select value={previewInvoiceId} onChange={e => setPreviewInvoiceId(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+          <SearchSelect value={previewInvoiceId} onChange={e => setPreviewInvoiceId(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
             <option value="">-- เลือก Invoice --</option>
             {invoices.map(inv => <option key={inv.id} value={inv.id}>{inv.number} — {inv.customer?.name}</option>)}
-          </select>
+          </SearchSelect>
           <button onClick={handlePreview} disabled={!selected || !previewInvoiceId}
             style={{ background: '#FFB59E15', border: '1px solid #FFB59E40', color: 'var(--color-accent-light)', fontWeight: 700, fontSize: 12, borderRadius: 8, padding: '9px', cursor: 'pointer', opacity: !selected || !previewInvoiceId ? 0.5 : 1 }}>
             🔍 สร้าง Preview PDF
@@ -196,22 +196,23 @@ export default function DocTemplateEditorPage() {
       </div>
 
       {showCreate && (
-        <div style={overlay} onClick={() => setShowCreate(false)}>
-          <div style={modal} onClick={e => e.stopPropagation()}>
+        <div className="doc-panel">
+          <PanelBack onClick={() => setShowCreate(false)} label="กลับไปที่เทมเพลตเอกสาร" />
+          <div className="doc-panel-card">
             <div style={{ padding: '18px 24px', borderBottom: '1px solid var(--color-border)' }}><h3 style={{ margin: 0, fontSize: 15, fontWeight: 800 }}>สร้างเทมเพลตใหม่</h3></div>
             <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
               <div><label style={lbl}>ชื่อเทมเพลต</label><input value={newName} onChange={e => setNewName(e.target.value)} placeholder="เช่น แบบมาตรฐาน" style={inp} /></div>
               <div>
                 <label style={lbl}>ประเภทเอกสาร</label>
-                <select value={newKind} onChange={e => setNewKind(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect value={newKind} onChange={e => setNewKind(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                   <option value="invoice">ใบแจ้งหนี้</option><option value="quotation">ใบเสนอราคา</option><option value="receipt">ใบเสร็จ</option>
-                </select>
+                </SearchSelect>
               </div>
               <div>
                 <label style={lbl}>รูปแบบเลย์เอาต์</label>
-                <select value={newLayout} onChange={e => setNewLayout(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
+                <SearchSelect value={newLayout} onChange={e => setNewLayout(e.target.value)} style={{ ...inp, cursor: 'pointer' }}>
                   {LAYOUTS.map(l => <option key={l.value} value={l.value}>{l.label}</option>)}
-                </select>
+                </SearchSelect>
               </div>
               <button onClick={() => createM.mutate()} disabled={!newName || createM.isPending}
                 style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '11px', cursor: 'pointer' }}>

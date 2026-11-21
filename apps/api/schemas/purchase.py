@@ -7,6 +7,7 @@ from models.purchase import PurchaseDocType
 from models.sales import SalesDocStatus
 from schemas.ap import SupplierResponse
 from schemas.sales import SalesItemCreate, SalesItemResponse, DocRef
+from schemas.accounting import DocumentBookRef
 
 
 class PurchaseDocCreate(BaseModel):
@@ -15,11 +16,16 @@ class PurchaseDocCreate(BaseModel):
     date:           date
     valid_until:    Optional[date] = None
     vat_rate:       Decimal = Decimal("7")
+    vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
+    discount_value:  Decimal = Decimal("0")   # ส่วนลดท้ายบิล: baht, or % when discount_is_pct
+    discount_is_pct: bool = False
+    discount_after_vat: bool = False   # True = the discount comes off the total after VAT
     deposit_amount: Decimal = Decimal("0")
     ref_number:     Optional[str] = None
     note:           Optional[str] = None
     bill_id:        Optional[UUID] = None   # credit/debit notes: the bill being adjusted
     reason:         Optional[str] = None
+    book_id:        Optional[UUID] = None   # สมุดบันทึก — needed to confirm a deposit or note
     items:          List[SalesItemCreate]
 
     @field_validator("items")
@@ -41,6 +47,11 @@ class PurchaseDocResponse(BaseModel):
     status:         SalesDocStatus
     subtotal:       Decimal
     vat_rate:       Decimal
+    vat_inclusive: bool = False   # True = line amounts include VAT (ราคารวม VAT)
+    discount_value:  Decimal = Decimal("0")   # ส่วนลดท้ายบิล: baht, or % when discount_is_pct
+    discount_is_pct: bool = False
+    discount_after_vat: bool = False   # True = the discount comes off the total after VAT
+    discount_amount: Decimal = Decimal("0")   # the bill discount in baht
     vat_amount:     Decimal
     total:          Decimal
     deposit_amount: Decimal
@@ -53,6 +64,8 @@ class PurchaseDocResponse(BaseModel):
     bill_id:        Optional[UUID] = None
     bill:           Optional[DocRef] = None
     reason:         Optional[str] = None
+    book_id:        Optional[UUID] = None
+    book:           Optional[DocumentBookRef] = None
     items:          List[SalesItemResponse] = []
     model_config = {"from_attributes": True}
 

@@ -18,6 +18,7 @@ new model in a future sprint can't silently break existing scripts again.
 
 import models.user          # noqa: F401
 import models.accounting    # noqa: F401
+import models.contact       # noqa: F401
 import models.ar            # noqa: F401
 import models.sales         # noqa: F401
 import models.ap            # noqa: F401

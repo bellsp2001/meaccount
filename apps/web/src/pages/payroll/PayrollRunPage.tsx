@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/lib/api'
+import SearchSelect from '@/components/ui/SearchSelect'
 
 interface Employee { id: string; employee_code: string; full_name: string; base_salary: number; status: string }
 interface Payslip {
@@ -63,12 +64,12 @@ export default function PayrollRunPage() {
           <p style={{ margin: '3px 0 0', fontSize: 12, color: 'var(--color-muted)' }}>Payroll Run — งวด {MONTHS_TH[month]} {year + 543}</p>
         </div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <select value={month} onChange={e => setMonth(Number(e.target.value))} style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 9, padding: '8px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
+          <SearchSelect value={month} onChange={e => setMonth(Number(e.target.value))} style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 9, padding: '8px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
             {MONTHS_TH.slice(1).map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </select>
-          <select value={year} onChange={e => setYear(Number(e.target.value))} style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 9, padding: '8px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
+          </SearchSelect>
+          <SearchSelect value={year} onChange={e => setYear(Number(e.target.value))} style={{ background: 'var(--color-card)', border: '1px solid var(--color-border)', borderRadius: 9, padding: '8px 12px', fontSize: 12, color: 'var(--color-text)', cursor: 'pointer' }}>
             {[year - 1, year, year + 1].map(y => <option key={y} value={y}>{y + 543}</option>)}
-          </select>
+          </SearchSelect>
           <button onClick={() => setShowConfirm(true)} disabled={activeEmployees.length === 0}
             style={{ background: 'linear-gradient(135deg,#FF9E80,#F2714E)', color: 'var(--color-on-accent)', fontWeight: 800, fontSize: 13, border: 'none', borderRadius: 9, padding: '9px 20px', cursor: 'pointer', opacity: activeEmployees.length === 0 ? 0.5 : 1 }}>
             ▶ ประมวลผลเงินเดือน
